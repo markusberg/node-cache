@@ -39,6 +39,7 @@
       "url": "https://erdii.engineering/"
     }
   ],
+  "type": "module",
   "main": "./index.js",
   "types": "./index.d.ts",
   "homepage": "https://github.com/node-cache/node-cache",
@@ -54,7 +55,7 @@
     "test": "mocha src/node-cache.test.js -R spec && tsc"
   },
   "dependencies": {
-    "clone": "2.x"
+    "@markusberg/clone": "^3.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.19.3",

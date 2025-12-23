@@ -1,9 +1,4 @@
-var localCache,
-  localCacheMaxKeys,
-  localCacheMset,
-  localCacheNoClone,
-  localCacheNoDelete,
-  localCacheTTL
+var localCache, localCacheNoDelete, localCacheTTL
 
 import { readFileSync } from 'node:fs'
 import nodeCache from './node-cache.js'
@@ -17,14 +12,6 @@ const pkg = JSON.parse(readFileSync('package.json').toString())
 
 localCache = new nodeCache({ stdTTL: 0 })
 
-localCacheNoClone = new nodeCache({
-  stdTTL: 0,
-  useClones: false,
-  checkperiod: 0,
-})
-
-localCacheMaxKeys = new nodeCache({ maxKeys: 2 })
-
 localCacheTTL = new nodeCache({
   stdTTL: 0.3,
   checkperiod: 0,
@@ -35,8 +22,6 @@ localCacheNoDelete = new nodeCache({
   checkperiod: 0,
   deleteOnExpire: false,
 })
-
-localCacheMset = new nodeCache({ stdTTL: 0 })
 
 let BENCH = {}
 
@@ -335,6 +320,12 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       value.should.not.be.eql(localCache.get(key))
     })
     it('test `useClones = false` with an Object', function () {
+      const localCacheNoClone = new nodeCache({
+        stdTTL: 0,
+        useClones: false,
+        checkperiod: 0,
+      })
+
       var c, key, value
       key = randomString(10)
       value = {
@@ -349,6 +340,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
   })
   describe('max key amount', function () {
     let state
+    const localCacheMaxKeys = new nodeCache({ maxKeys: 2 })
 
     before(function () {
       state = {
@@ -1145,6 +1137,12 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
   })
   describe('mset', function () {
     let state
+    let localCacheMset
+
+    beforeEach(() => {
+      localCacheMset = new nodeCache({ stdTTL: 0 })
+    })
+
     before(function () {
       state = {
         keyValueSet: [
@@ -1160,21 +1158,17 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       }
     })
     it('mset an array of key value pairs', function () {
-      var res
-      res = localCacheMset.mset(state.keyValueSet)
+      const res = localCacheMset.mset(state.keyValueSet)
       true.should.eql(res)
       ;(2).should.eql(localCacheMset.getStats().keys)
     })
     it('mset - integer key', function () {
-      var res
-      localCacheMset.flushAll()
       state.keyValueSet[0].key = randomNumber(10)
-      res = localCacheMset.mset(state.keyValueSet)
+      const res = localCacheMset.mset(state.keyValueSet)
       true.should.eql(res)
       ;(2).should.eql(localCacheMset.getStats().keys)
     })
     it('mset - boolean key throw error', function () {
-      localCacheMset.flushAll()
       state.keyValueSet[0].key = true
       ;(function () {
         return localCacheMset.mset(state.keyValueSet)
@@ -1185,7 +1179,6 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       })
     })
     it('mset - object key throw error', function () {
-      localCacheMset.flushAll()
       state.keyValueSet[0].key = {
         a: 1,
       }
@@ -1198,7 +1191,6 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       })
     })
     it('mset - ttl type error check', function () {
-      localCacheMset.flushAll()
       state.keyValueSet[0].ttl = {
         a: 1,
       }
@@ -1215,11 +1207,12 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
 
     beforeEach(function () {
       localCache.flushAll()
-      return (state = {
+
+      state = {
         func: function () {
           return 'foo'
         },
-      })
+      }
     })
     describe('when value is type of Function', function () {
       return it('execute it and fetch returned value', function () {
@@ -1251,10 +1244,13 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
   })
   describe('Issues', function () {
     describe('#151 - cannot set null', function () {
-      var cache
-      cache = null
-      before(function () {
+      let cache
+
+      before(() => {
         cache = new nodeCache()
+      })
+      after(() => {
+        cache.close()
       })
       it('set the value `null` - this should not throw or otherwise fail', function () {
         cache.set('test', null)
@@ -1269,7 +1265,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       var cache, globalBuffer
       cache = null
       globalBuffer = global.Buffer
-      before(function () {
+      before(() => {
         // make `Buffer` globally unavailable
         // we have to explicitly set to `undefined` because our `clone` dependency checks for that
         global.Buffer = void 0
@@ -1281,16 +1277,18 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       })
       after(function () {
         global.Buffer = globalBuffer
-        return should(Buffer).eql(globalBuffer)
+        cache.close()
+        should(Buffer).eql(globalBuffer)
       })
     })
+
     describe('#263 - forceString never works', function () {
-      var cache
-      cache = null
-      before(function () {
-        cache = new nodeCache({
-          forceString: true,
-        })
+      let cache = null
+      before(() => {
+        cache = new nodeCache({ forceString: true })
+      })
+      after(() => {
+        cache.close()
       })
       it('set the value `null` - this should transform into a string', function () {
         cache.set('test', null)

@@ -3,21 +3,19 @@ var localCache,
   localCacheMset,
   localCacheNoClone,
   localCacheNoDelete,
-  localCacheTTL,
-  indexOf = [].indexOf
+  localCacheTTL
 
 import { readFileSync } from 'node:fs'
 import nodeCache from './node-cache.js'
 import { randomNumber, randomString, diffKeys } from './helpers.js'
 import clone from '@markusberg/clone'
+import { beforeEach, describe, it, before, after } from 'mocha'
 
 import should from 'should'
 
-const pkg = JSON.parse(readFileSync('package.json'))
+const pkg = JSON.parse(readFileSync('package.json').toString())
 
-localCache = new nodeCache({
-  stdTTL: 0,
-})
+localCache = new nodeCache({ stdTTL: 0 })
 
 localCacheNoClone = new nodeCache({
   stdTTL: 0,
@@ -25,9 +23,7 @@ localCacheNoClone = new nodeCache({
   checkperiod: 0,
 })
 
-localCacheMaxKeys = new nodeCache({
-  maxKeys: 2,
-})
+localCacheMaxKeys = new nodeCache({ maxKeys: 2 })
 
 localCacheTTL = new nodeCache({
   stdTTL: 0.3,
@@ -40,17 +36,12 @@ localCacheNoDelete = new nodeCache({
   deleteOnExpire: false,
 })
 
-localCacheMset = new nodeCache({
-  stdTTL: 0,
-})
+localCacheMset = new nodeCache({ stdTTL: 0 })
 
 let BENCH = {}
 
 // just for testing disable the check period
 localCache._killCheckPeriod()
-
-// store test state
-let state = {}
 
 describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, function () {
   after(function () {
@@ -62,7 +53,9 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
     }
     console.log(txt)
   })
-  describe('general sync-style', function () {
+  describe('general sync-style', () => {
+    let state
+
     before(function () {
       localCache.flushAll()
       state = {
@@ -355,6 +348,8 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
     })
   })
   describe('max key amount', function () {
+    let state
+
     before(function () {
       state = {
         key1: randomString(10),
@@ -388,13 +383,13 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
   })
   describe('correct and incorrect key types', function () {
     describe('number', function () {
+      let state
       before(function () {
-        var j
         state = {
           keys: [],
           val: randomString(20),
         }
-        for (var j = 1; j <= 10; j++) {
+        for (let j = 1; j <= 10; j++) {
           state.keys.push(randomNumber(100000))
         }
       })
@@ -456,13 +451,13 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       })
     })
     describe('string', function () {
+      let state
       before(function () {
-        var j
         state = {
           keys: [],
           val: randomString(20),
         }
-        for (var j = 1; j <= 10; j++) {
+        for (let j = 1; j <= 10; j++) {
           state.keys.push(randomString(10))
         }
       })
@@ -521,6 +516,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       })
     })
     describe('boolean - invalid type', function () {
+      let state
       before(function () {
         state = {
           keys: [true, false],
@@ -592,6 +588,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       })
     })
     describe('object - invalid type', function () {
+      let state
       before(function () {
         state = {
           keys: [
@@ -671,6 +668,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
     })
   })
   describe('flush', function () {
+    let state
     before(function () {
       state = {
         n: 0,
@@ -725,68 +723,50 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
     })
   })
   describe('many', function () {
+    let state
     return before(function () {
-      var j, key, ref
       state = {
         n: 0,
         count: 100000,
         keys: [],
         val: randomString(20),
       }
-      for (
-        j = 1, ref = state.count;
-        1 <= ref ? j <= ref : j >= ref;
-        1 <= ref ? j++ : j--
-      ) {
-        key = randomString(7)
+      for (let i = 0; i < state.count; i++) {
+        const key = randomString(7)
         state.keys.push(key)
       }
     })
   })
-  describe('delete', function () {
+  describe('delete', () => {
     this.timeout(0)
+
+    let state
+
     before(function () {
-      // don't override state because we still need `state.keys`
-      state.n = 0
-    })
-    before(function () {
-      var j, key, ref
       state = {
         n: 0,
         count: 100000,
         keys: [],
         val: randomString(20),
       }
-      for (
-        j = 1, ref = state.count;
-        1 <= ref ? j <= ref : j >= ref;
-        1 <= ref ? j++ : j--
-      ) {
-        key = randomString(7)
+      for (let j = 0; j < state.count; j++) {
+        const key = randomString(7)
         state.keys.push(key)
         localCache.set(key, state.val)
       }
     })
+
     it('delete all previously set keys', function () {
-      var i, j, ref
-      for (
-        i = j = 0, ref = state.count;
-        0 <= ref ? j < ref : j > ref;
-        i = 0 <= ref ? ++j : --j
-      ) {
+      for (let i = 0; i < state.count; i++) {
         ;(1).should.eql(localCache.del(state.keys[i]))
         state.n++
       }
       state.n.should.eql(state.count)
       localCache.getStats().keys.should.eql(0)
     })
+
     it('delete keys again; should not delete anything', function () {
-      var i, j, ref
-      for (
-        i = j = 0, ref = state.count;
-        0 <= ref ? j < ref : j > ref;
-        i = 0 <= ref ? ++j : --j
-      ) {
+      for (let i = 0; i < state.count; i++) {
         ;(0).should.eql(localCache.del(state.keys[i]))
         state.n++
       }
@@ -795,8 +775,9 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
     })
   })
   describe('stats', function () {
+    let state
+
     before(function () {
-      var j, key, ref, value
       state = {
         n: 0,
         start: clone(localCache.getStats()),
@@ -806,13 +787,9 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         keys: [],
         values: [],
       }
-      for (
-        j = 1, ref = state.count * 2;
-        1 <= ref ? j <= ref : j >= ref;
-        1 <= ref ? j++ : j--
-      ) {
-        key = randomString(state.keylength)
-        value = randomString(state.valuelength)
+      for (let i = 0; i < state.count * 2; i++) {
+        const key = randomString(state.keylength)
+        const value = randomString(state.valuelength)
         state.keys.push(key)
         state.values.push(value)
         true.should.eql(localCache.set(key, value, 0))
@@ -820,43 +797,29 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       }
     })
     it('get and remove `count` elements', function () {
-      var after, diff, i, j, k, ref, ref1
-      for (
-        i = j = 1, ref = state.count;
-        1 <= ref ? j <= ref : j >= ref;
-        i = 1 <= ref ? ++j : --j
-      ) {
+      for (let i = 0; i < state.count; i++) {
         state.values[i].should.eql(localCache.get(state.keys[i]))
         state.n++
       }
-      for (
-        i = k = 1, ref1 = state.count;
-        1 <= ref1 ? k <= ref1 : k >= ref1;
-        i = 1 <= ref1 ? ++k : --k
-      ) {
+      for (let i = 0; i < state.count; i++) {
         ;(1).should.eql(localCache.del(state.keys[i]))
         state.n++
       }
-      after = localCache.getStats()
-      diff = diffKeys(after, state.start)
+      const after = localCache.getStats()
+      const diff = diffKeys(after, state.start)
       diff.hits.should.eql(5)
       diff.keys.should.eql(5)
       diff.ksize.should.eql(state.count * state.keylength)
       diff.vsize.should.eql(state.count * state.valuelength)
     })
     it('generate `count` misses', function () {
-      var after, diff, i, j, ref
-      for (
-        i = j = 1, ref = state.count;
-        1 <= ref ? j <= ref : j >= ref;
-        i = 1 <= ref ? ++j : --j
-      ) {
+      for (let i = 0; i < state.count; i++) {
         // 4 char key should not exist
         should(localCache.get('xxxx')).be.undefined()
         state.n++
       }
-      after = localCache.getStats()
-      diff = diffKeys(after, state.start)
+      const after = localCache.getStats()
+      const diff = diffKeys(after, state.start)
       diff.misses.should.eql(5)
     })
     it('check successful runs', function () {
@@ -864,8 +827,9 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
     })
   })
   describe('multi', function () {
+    let state
+
     before(function () {
-      var j, k, key, len, ref, ref1
       state = {
         n: 0,
         count: 100,
@@ -873,17 +837,11 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         value: randomString(20),
         keys: [],
       }
-      for (
-        j = 1, ref = state.count;
-        1 <= ref ? j <= ref : j >= ref;
-        1 <= ref ? j++ : j--
-      ) {
-        key = randomString(7)
+      for (let i = 0; i < state.count; i++) {
+        const key = randomString(7)
         state.keys.push(key)
       }
-      ref1 = state.keys
-      for (k = 0, len = ref1.length; k < len; k++) {
-        key = ref1[k]
+      for (const key of state.keys) {
         localCache.set(key, state.value, 0)
         state.n++
       }
@@ -926,6 +884,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
     })
   })
   describe('ttl', function () {
+    let state
     before(function () {
       state = {
         n: 0,
@@ -1057,7 +1016,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       it("wait for 'expired' event", function (done) {
         localCache.once('expired', function (key, val) {
           innerState.key.should.eql(key)
-          ;(indexOf.call(state.keys, key) < 0).should.eql(true)
+          state.keys.includes(key).should.eql(false)
           should(localCache.data[key]).be.undefined()
           done()
         })
@@ -1185,6 +1144,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
     })
   })
   describe('mset', function () {
+    let state
     before(function () {
       state = {
         keyValueSet: [
@@ -1251,6 +1211,8 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
     })
   })
   describe('fetch', function () {
+    let state
+
     beforeEach(function () {
       localCache.flushAll()
       return (state = {
@@ -1259,29 +1221,29 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         },
       })
     })
-    context('when value is type of Function', function () {
+    describe('when value is type of Function', function () {
       return it('execute it and fetch returned value', function () {
         'foo'.should.eql(localCache.fetch('key', 100, state.func))
       })
     })
-    context('when value is not a function', function () {
+    describe('when value is not a function', function () {
       return it('return the value itself', function () {
         'bar'.should.eql(localCache.fetch('key', 100, 'bar'))
       })
     })
-    context('cache hit', function () {
+    describe('cache hit', function () {
       return it('return cached value', function () {
         localCache.set('key', 'bar', 100)
         'bar'.should.eql(localCache.fetch('key', 100, state.func))
       })
     })
-    context('cache miss', function () {
+    describe('cache miss', function () {
       return it('write given value to cache and return it', function () {
         'foo'.should.eql(localCache.fetch('key', 100, state.func))
         'foo'.should.eql(localCache.get('key'))
       })
     })
-    return context('when ttl is omitted', function () {
+    return describe('when ttl is omitted', function () {
       return it('swap ttl and value', function () {
         'foo'.should.eql(localCache.fetch('key', state.func))
       })

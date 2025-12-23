@@ -54,6 +54,15 @@ export default class NodeCache extends EventEmitter {
     vsize: 0,
   }
 
+  // pre allocate valid keytypes array
+  validKeyTypes = ['string', 'number']
+
+  // timeout object for checkperiod
+  checkTimeout = null
+
+  // errors
+  ERRORS = {}
+
   constructor(options = {}) {
     super()
 
@@ -70,8 +79,6 @@ export default class NodeCache extends EventEmitter {
     // module options
     this.options = { ...this.options, ...options }
 
-    // pre allocate valid keytypes array
-    this.validKeyTypes = ['string', 'number']
     // initalize checking period
     this._checkData()
     return

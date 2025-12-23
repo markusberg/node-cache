@@ -7,13 +7,6 @@
  *
  * Maintained by  (  )
  */
-var splice = [].splice,
-  boundMethodCheck = function (instance, Constructor) {
-    if (!(instance instanceof Constructor)) {
-      throw new Error('Bound instance method accessed before binding')
-    }
-  },
-  indexOf = [].indexOf
 
 import clone from '@markusberg/clone'
 import { EventEmitter } from 'node:events'
@@ -28,358 +21,55 @@ export default class NodeCache extends EventEmitter {
     ETTLTYPE: 'The ttl argument has to be a number.',
   }
 
+  options = {
+    // convert all elements to string
+    forceString: false,
+    // used standard size for calculating value size
+    objectValueSize: 80,
+    promiseValueSize: 80,
+    arrayValueSize: 40,
+    // standard time to live in seconds. 0 = infinity;
+    stdTTL: 0,
+    // time in seconds to check all data and delete expired keys
+    checkperiod: 600,
+    // en/disable cloning of variables. If `true` you'll get a copy of the cached variable. If `false` you'll save and get just the reference
+    useClones: true,
+    // whether values should be deleted automatically at expiration
+    deleteOnExpire: true,
+    // enable legacy callbacks
+    enableLegacyCallbacks: false,
+    // max amount of keys that are being stored
+    maxKeys: -1,
+  }
+
+  // container for cached data
+  data = {}
+
+  // statistics container
+  stats = {
+    hits: 0,
+    misses: 0,
+    keys: 0,
+    ksize: 0,
+    vsize: 0,
+  }
+
   constructor(options = {}) {
     super()
-    // ## get
 
-    // get a cached key and change the stats
-
-    // **Parameters:**
-
-    // * `key` ( String | Number ): cache key
-
-    // **Example:**
-
-    //	myCache.get "myKey", ( err, val )
-
-    this.get = this.get.bind(this)
-    // ## mget
-
-    // get multiple cached keys at once and change the stats
-
-    // **Parameters:**
-
-    // * `keys` ( String|Number[] ): an array of keys
-
-    // **Example:**
-
-    //	myCache.mget [ "foo", "bar" ]
-
-    this.mget = this.mget.bind(this)
-    // ## set
-
-    // set a cached key and change the stats
-
-    // **Parameters:**
-
-    // * `key` ( String | Number ): cache key
-    // * `value` ( Any ): An element to cache. If the option `option.forceString` is `true` the module trys to translate it to a serialized JSON
-    // * `[ ttl ]` ( Number | String ): ( optional ) The time to live in seconds.
-
-    // **Example:**
-
-    //	myCache.set "myKey", "my_String Value"
-
-    //	myCache.set "myKey", "my_String Value", 10
-
-    this.set = this.set.bind(this)
-
-    // ## fetch
-
-    // in the event of a cache miss (no value is assinged to given cache key), value will be written to cache and returned. In case of cache hit, cached value will be returned without executing given value. If the given value is type of `Function`, it will be executed and returned result will be fetched
-
-    // **Parameters:**
-
-    // * `key` ( String | Number ): cache key
-    // * `[ ttl ]` ( Number | String ): ( optional ) The time to live in seconds.
-    // * `value` ( Any ): if `Function` type is given, it will be executed and returned value will be fetched, otherwise the value itself is fetched
-
-    // **Example:**
-
-    // myCache.fetch "myKey", 10, () => "my_String value"
-
-    // myCache.fetch "myKey", "my_String value"
-
-    this.fetch = this.fetch.bind(this)
-    // ## mset
-
-    // set multiple keys at once
-
-    // **Parameters:**
-
-    // * `keyValueSet` ( Object[] ): an array of objects which include key, value, and ttl
-
-    // **Example:**
-
-    //	myCache.mset(
-    //		[
-    //			{
-    //				key: "myKey",
-    //				val: "myValue",
-    //				ttl: [ttl in seconds]
-    //			}
-    //		])
-
-    this.mset = this.mset.bind(this)
-    // ## del
-
-    // remove keys
-
-    // **Parameters:**
-
-    // * `keys` ( String | Number | String|Number[] ): cache key to delete or an array of cache keys
-
-    // **Return**
-
-    // ( Number ): Number of deleted keys
-
-    // **Example:**
-
-    //	myCache.del( "myKey" )
-
-    this.del = this.del.bind(this)
-    // ## take
-
-    // get the cached value and remove the key from the cache.
-    // Equivalent to calling `get(key)` + `del(key)`.
-    // Useful for implementing `single use` mechanism such as OTP, where once a value is read it will become obsolete.
-
-    // **Parameters:**
-
-    // * `key` ( String | Number ): cache key
-
-    // **Example:**
-
-    //	myCache.take "myKey", ( err, val )
-
-    this.take = this.take.bind(this)
-    // ## ttl
-
-    // reset or redefine the ttl of a key. `ttl` = 0 means infinite lifetime.
-    // If `ttl` is not passed the default ttl is used.
-    // If `ttl` < 0 the key will be deleted.
-
-    // **Parameters:**
-
-    // * `key` ( String | Number ): cache key to reset the ttl value
-    // * `ttl` ( Number ): ( optional -> options.stdTTL || 0 ) The time to live in seconds
-
-    // **Return**
-
-    // ( Boolen ): key found and ttl set
-
-    // **Example:**
-
-    //	myCache.ttl( "myKey" ) // will set ttl to default ttl
-
-    //	myCache.ttl( "myKey", 1000 )
-
-    this.ttl = this.ttl.bind(this)
-    // ## getTtl
-
-    // receive the ttl of a key.
-
-    // **Parameters:**
-
-    // * `key` ( String | Number ): cache key to check the ttl value of
-
-    // **Return**
-
-    // ( Number|undefined ): The timestamp in ms when the key will expire, 0 if it will never expire or undefined if it not exists
-
-    // **Example:**
-
-    //	myCache.getTtl( "myKey" )
-
-    this.getTtl = this.getTtl.bind(this)
-    // ## keys
-
-    // list all keys within this cache
-
-    // **Return**
-
-    // ( Array ): An array of all keys
-
-    // **Example:**
-
-    //     _keys = myCache.keys()
-
-    //     # [ "foo", "bar", "fizz", "buzz", "anotherKeys" ]
-
-    this.keys = this.keys.bind(this)
-    // ## has
-
-    // Check if a key is cached
-
-    // **Parameters:**
-
-    // * `key` ( String | Number ): cache key to check the ttl value
-
-    // **Return**
-
-    // ( Boolean ): A boolean that indicates if the key is cached
-
-    // **Example:**
-
-    //     _exists = myCache.has('myKey')
-
-    //     # true
-
-    this.has = this.has.bind(this)
-    // ## getStats
-
-    // get the stats
-
-    // **Parameters:**
-
-    // -
-
-    // **Return**
-
-    // ( Object ): Stats data
-
-    // **Example:**
-
-    //     myCache.getStats()
-    //     # {
-    //     # hits: 0,
-    //     # misses: 0,
-    //     # keys: 0,
-    //     # ksize: 0,
-    //     # vsize: 0
-    //     # }
-
-    this.getStats = this.getStats.bind(this)
-    // ## flushAll
-
-    // flush the whole data and reset the stats
-
-    // **Example:**
-
-    //     myCache.flushAll()
-
-    //     myCache.getStats()
-    //     # {
-    //     # hits: 0,
-    //     # misses: 0,
-    //     # keys: 0,
-    //     # ksize: 0,
-    //     # vsize: 0
-    //     # }
-
-    this.flushAll = this.flushAll.bind(this)
-
-    // ## flushStats
-
-    // flush the stats and reset all counters to 0
-
-    // **Example:**
-
-    //     myCache.flushStats()
-
-    //     myCache.getStats()
-    //     # {
-    //     # hits: 0,
-    //     # misses: 0,
-    //     # keys: 0,
-    //     # ksize: 0,
-    //     # vsize: 0
-    //     # }
-
-    this.flushStats = this.flushStats.bind(this)
-    // ## close
-
-    // This will clear the interval timeout which is set on checkperiod option.
-
-    // **Example:**
-
-    //     myCache.close()
-
-    this.close = this.close.bind(this)
-    // ## _checkData
-
-    // internal housekeeping method.
-    // Check all the cached data and delete the invalid values
+    /**
+     * FIXME:
+     * This is an artifact from the coffeescript to javascript compilation
+     * Every other one has been removed, but this one remains because
+     * a test fails otherwise. Weird.
+     */
     this._checkData = this._checkData.bind(this)
-    // ## _check
 
-    // internal method the check the value. If it's not valid any more delete it
-    this._check = this._check.bind(this)
-    // ## _isInvalidKey
-
-    // internal method to check if the type of a key is either `number` or `string`
-    this._isInvalidKey = this._isInvalidKey.bind(this)
-    // ## _wrap
-
-    // internal method to wrap a value in an object with some metadata
-    this._wrap = this._wrap.bind(this)
-    // ## _getValLength
-
-    // internal method to calculate the value length
-    this._getValLength = this._getValLength.bind(this)
-    // ## _error
-
-    // internal method to handle an error message
-    this._error = this._error.bind(this)
-    // ## _initErrors
-
-    // internal method to generate error message templates
-    this._initErrors = this._initErrors.bind(this)
-    this.options = options
     this._initErrors()
-    // container for cached data
-    this.data = {}
+
     // module options
-    this.options = Object.assign(
-      {
-        // convert all elements to string
-        forceString: false,
-        // used standard size for calculating value size
-        objectValueSize: 80,
-        promiseValueSize: 80,
-        arrayValueSize: 40,
-        // standard time to live in seconds. 0 = infinity;
-        stdTTL: 0,
-        // time in seconds to check all data and delete expired keys
-        checkperiod: 600,
-        // en/disable cloning of variables. If `true` you'll get a copy of the cached variable. If `false` you'll save and get just the reference
-        useClones: true,
-        // whether values should be deleted automatically at expiration
-        deleteOnExpire: true,
-        // enable legacy callbacks
-        enableLegacyCallbacks: false,
-        // max amount of keys that are being stored
-        maxKeys: -1,
-      },
-      this.options,
-    )
-    // generate functions with callbacks (legacy)
-    if (this.options.enableLegacyCallbacks) {
-      console.warn(
-        'WARNING! node-cache legacy callback support will drop in v6.x',
-      )
-      ;['get', 'mget', 'set', 'del', 'ttl', 'getTtl', 'keys', 'has'].forEach(
-        (methodKey) => {
-          var oldMethod
-          // reference real function
-          oldMethod = this[methodKey]
-          this[methodKey] = function (...args) {
-            var cb, err, ref, res
-            ;(ref = args), ([...args] = ref), ([cb] = splice.call(args, -1))
-            // return a callback if cb is defined and a function
-            if (typeof cb === 'function') {
-              try {
-                res = oldMethod(...args)
-                cb(null, res)
-              } catch (error1) {
-                err = error1
-                cb(err)
-              }
-            } else {
-              return oldMethod(...args, cb)
-            }
-          }
-        },
-      )
-    }
-    // statistics container
-    this.stats = {
-      hits: 0,
-      misses: 0,
-      keys: 0,
-      ksize: 0,
-      vsize: 0,
-    }
+    this.options = { ...this.options, ...options }
+
     // pre allocate valid keytypes array
     this.validKeyTypes = ['string', 'number']
     // initalize checking period
@@ -387,9 +77,14 @@ export default class NodeCache extends EventEmitter {
     return
   }
 
+  // get a cached key and change the stats
+  // **Parameters:**
+  // * `key` ( String | Number ): cache key
+  // **Example:**
+  //	myCache.get "myKey", ( err, val )
   get(key) {
     var _ret, err
-    boundMethodCheck(this, NodeCache)
+
     // handle invalid key types
     if ((err = this._isInvalidKey(key)) != null) {
       throw err
@@ -407,9 +102,14 @@ export default class NodeCache extends EventEmitter {
     }
   }
 
+  // get multiple cached keys at once and change the stats
+  // **Parameters:**
+  // * `keys` ( String|Number[] ): an array of keys
+  // **Example:**
+  //	myCache.mget [ "foo", "bar" ]
   mget(keys) {
     var _err, err, i, key, len, oRet
-    boundMethodCheck(this, NodeCache)
+
     // convert a string to an array of one key
     if (!Array.isArray(keys)) {
       _err = this._error('EKEYSTYPE')
@@ -436,9 +136,17 @@ export default class NodeCache extends EventEmitter {
     return oRet
   }
 
+  // set a cached key and change the stats
+  // **Parameters:**
+  // * `key` ( String | Number ): cache key
+  // * `value` ( Any ): An element to cache. If the option `option.forceString` is `true` the module trys to translate it to a serialized JSON
+  // * `[ ttl ]` ( Number | String ): ( optional ) The time to live in seconds.
+  // **Example:**
+  //	myCache.set "myKey", "my_String Value"
+  //	myCache.set "myKey", "my_String Value", 10
   set(key, value, ttl) {
     var _err, err, existent
-    boundMethodCheck(this, NodeCache)
+
     // check if cache is overflowing
     if (this.options.maxKeys > -1 && this.stats.keys >= this.options.maxKeys) {
       _err = this._error('ECACHEFULL')
@@ -478,9 +186,17 @@ export default class NodeCache extends EventEmitter {
     return true
   }
 
+  // in the event of a cache miss (no value is assinged to given cache key), value will be written to cache and returned. In case of cache hit, cached value will be returned without executing given value. If the given value is type of `Function`, it will be executed and returned result will be fetched
+  // **Parameters:**
+  // * `key` ( String | Number ): cache key
+  // * `[ ttl ]` ( Number | String ): ( optional ) The time to live in seconds.
+  // * `value` ( Any ): if `Function` type is given, it will be executed and returned value will be fetched, otherwise the value itself is fetched
+  // **Example:**
+  // myCache.fetch "myKey", 10, () => "my_String value"
+  // myCache.fetch "myKey", "my_String value"
   fetch(key, ttl, value) {
     var _ret
-    boundMethodCheck(this, NodeCache)
+
     // check if cache is hit
     if (this.has(key)) {
       return this.get(key)
@@ -494,9 +210,21 @@ export default class NodeCache extends EventEmitter {
     return _ret
   }
 
+  // set multiple keys at once
+  // **Parameters:**
+  // * `keyValueSet` ( Object[] ): an array of objects which include key, value, and ttl
+  // **Example:**
+  //	myCache.mset(
+  //		[
+  //			{
+  //				key: "myKey",
+  //				val: "myValue",
+  //				ttl: [ttl in seconds]
+  //			}
+  //		])
   mset(keyValueSet) {
     var _err, err, i, j, key, keyValuePair, len, len1, ttl, val
-    boundMethodCheck(this, NodeCache)
+
     // check if cache is overflowing
     if (
       this.options.maxKeys > -1 &&
@@ -528,9 +256,16 @@ export default class NodeCache extends EventEmitter {
     return true
   }
 
+  // remove keys
+  // **Parameters:**
+  // * `keys` ( String | Number | String|Number[] ): cache key to delete or an array of cache keys
+  // **Return**
+  // ( Number ): Number of deleted keys
+  // **Example:**
+  //	myCache.del( "myKey" )
   del(keys) {
     var delCount, err, i, key, len, oldVal
-    boundMethodCheck(this, NodeCache)
+
     // convert keys to an array of itself
     if (!Array.isArray(keys)) {
       keys = [keys]
@@ -561,9 +296,16 @@ export default class NodeCache extends EventEmitter {
     return delCount
   }
 
+  // get the cached value and remove the key from the cache.
+  // Equivalent to calling `get(key)` + `del(key)`.
+  // Useful for implementing `single use` mechanism such as OTP, where once a value is read it will become obsolete.
+  // **Parameters:**
+  // * `key` ( String | Number ): cache key
+  // **Example:**
+  //	myCache.take "myKey", ( err, val )
   take(key) {
     var _ret
-    boundMethodCheck(this, NodeCache)
+
     _ret = this.get(key)
     if (_ret != null) {
       this.del(key)
@@ -571,9 +313,20 @@ export default class NodeCache extends EventEmitter {
     return _ret
   }
 
+  // reset or redefine the ttl of a key. `ttl` = 0 means infinite lifetime.
+  // If `ttl` is not passed the default ttl is used.
+  // If `ttl` < 0 the key will be deleted.
+  // **Parameters:**
+  // * `key` ( String | Number ): cache key to reset the ttl value
+  // * `ttl` ( Number ): ( optional -> options.stdTTL || 0 ) The time to live in seconds
+  // **Return**
+  // ( Boolen ): key found and ttl set
+  // **Example:**
+  //	myCache.ttl( "myKey" ) // will set ttl to default ttl
+  //	myCache.ttl( "myKey", 1000 )
   ttl(key, ttl) {
     var err
-    boundMethodCheck(this, NodeCache)
+
     ttl || (ttl = this.options.stdTTL)
     if (!key) {
       return false
@@ -597,9 +350,16 @@ export default class NodeCache extends EventEmitter {
     }
   }
 
+  // receive the ttl of a key.
+  // **Parameters:**
+  // * `key` ( String | Number ): cache key to check the ttl value of
+  // **Return**
+  // ( Number|undefined ): The timestamp in ms when the key will expire, 0 if it will never expire or undefined if it not exists
+  // **Example:**
+  //	myCache.getTtl( "myKey" )
   getTtl(key) {
     var _ttl, err
-    boundMethodCheck(this, NodeCache)
+
     if (!key) {
       return void 0
     }
@@ -617,27 +377,64 @@ export default class NodeCache extends EventEmitter {
     }
   }
 
+  // list all keys within this cache
+  // **Return**
+  // ( Array ): An array of all keys
+  // **Example:**
+  //     _keys = myCache.keys()
+  //     # [ "foo", "bar", "fizz", "buzz", "anotherKeys" ]
   keys() {
     var _keys
-    boundMethodCheck(this, NodeCache)
+
     _keys = Object.keys(this.data)
     return _keys
   }
 
+  // Check if a key is cached
+  // **Parameters:**
+  // * `key` ( String | Number ): cache key to check the ttl value
+  // **Return**
+  // ( Boolean ): A boolean that indicates if the key is cached
+  // **Example:**
+  //     _exists = myCache.has('myKey')
+  //     # true
   has(key) {
     var _exists
-    boundMethodCheck(this, NodeCache)
+
     _exists = this.data[key] != null && this._check(key, this.data[key])
     return _exists
   }
 
+  // get the stats
+  // **Parameters:**
+  // -
+  // **Return**
+  // ( Object ): Stats data
+  // **Example:**
+  //     myCache.getStats()
+  //     # {
+  //     # hits: 0,
+  //     # misses: 0,
+  //     # keys: 0,
+  //     # ksize: 0,
+  //     # vsize: 0
+  //     # }
   getStats() {
-    boundMethodCheck(this, NodeCache)
     return this.stats
   }
 
+  // flush the whole data and reset the stats
+  // **Example:**
+  //     myCache.flushAll()
+  //     myCache.getStats()
+  //     # {
+  //     # hits: 0,
+  //     # misses: 0,
+  //     # keys: 0,
+  //     # ksize: 0,
+  //     # vsize: 0
+  //     # }
   flushAll(_startPeriod = true) {
-    boundMethodCheck(this, NodeCache)
     // parameter just for testing
 
     // set data empty
@@ -656,8 +453,18 @@ export default class NodeCache extends EventEmitter {
     this.emit('flush')
   }
 
+  // flush the stats and reset all counters to 0
+  // **Example:**
+  //     myCache.flushStats()
+  //     myCache.getStats()
+  //     # {
+  //     # hits: 0,
+  //     # misses: 0,
+  //     # keys: 0,
+  //     # ksize: 0,
+  //     # vsize: 0
+  //     # }
   flushStats() {
-    boundMethodCheck(this, NodeCache)
     // reset stats
     this.stats = {
       hits: 0,
@@ -669,14 +476,16 @@ export default class NodeCache extends EventEmitter {
     this.emit('flush_stats')
   }
 
+  // This will clear the interval timeout which is set on checkperiod option.
   close() {
-    boundMethodCheck(this, NodeCache)
     this._killCheckPeriod()
   }
 
+  // internal housekeeping method.
+  // Check all the cached data and delete the invalid values
   _checkData(startPeriod = true) {
     var key, ref, value
-    boundMethodCheck(this, NodeCache)
+
     ref = this.data
     // run the housekeeping method
     for (key in ref) {
@@ -695,8 +504,6 @@ export default class NodeCache extends EventEmitter {
     }
   }
 
-  // ## _killCheckPeriod
-
   // stop the checkdata period. Only needed to abort the script in testing mode.
   _killCheckPeriod() {
     if (this.checkTimeout != null) {
@@ -704,9 +511,10 @@ export default class NodeCache extends EventEmitter {
     }
   }
 
+  // internal method the check the value. If it's not valid any more delete it
   _check(key, data) {
     var _retval
-    boundMethodCheck(this, NodeCache)
+
     _retval = true
     // data is invalid if the ttl is too old and is not 0
     // console.log data.t < Date.now(), data.t, Date.now()
@@ -720,19 +528,21 @@ export default class NodeCache extends EventEmitter {
     return _retval
   }
 
+  // internal method to check if the type of a key is either `number` or `string`
   _isInvalidKey(key) {
-    var ref
-    boundMethodCheck(this, NodeCache)
-    if (((ref = typeof key), indexOf.call(this.validKeyTypes, ref) < 0)) {
+    const ref = typeof key
+
+    if (!this.validKeyTypes.includes(ref)) {
       return this._error('EKEYTYPE', {
-        type: typeof key,
+        type: ref,
       })
     }
   }
 
+  // internal method to wrap a value in an object with some metadata
   _wrap(value, ttl, asClone = true) {
     var livetime, now, oReturn, ttlMultiplicator
-    boundMethodCheck(this, NodeCache)
+
     if (!this.options.useClones) {
       asClone = false
     }
@@ -760,8 +570,6 @@ export default class NodeCache extends EventEmitter {
     })
   }
 
-  // ## _unwrap
-
   // internal method to extract get the value out of the wrapped value
   _unwrap(value, asClone = true) {
     if (!this.options.useClones) {
@@ -777,15 +585,13 @@ export default class NodeCache extends EventEmitter {
     return null
   }
 
-  // ## _getKeyLength
-
   // internal method the calculate the key length
   _getKeyLength(key) {
     return key.toString().length
   }
 
+  // internal method to calculate the value length
   _getValLength(value) {
-    boundMethodCheck(this, NodeCache)
     if (typeof value === 'string') {
       // if the value is a String get the real length
       return value.length
@@ -818,9 +624,10 @@ export default class NodeCache extends EventEmitter {
     }
   }
 
+  // internal method to handle an error message
   _error(type, data = {}) {
     var error
-    boundMethodCheck(this, NodeCache)
+
     // generate the error object
     error = new Error()
     error.name = type
@@ -831,9 +638,10 @@ export default class NodeCache extends EventEmitter {
     return error
   }
 
+  // internal method to generate error message templates
   _initErrors() {
     var _errMsg, _errT, ref
-    boundMethodCheck(this, NodeCache)
+
     this.ERRORS = {}
     ref = this._ERRORS
     for (_errT in ref) {

@@ -52,7 +52,8 @@
     "node": ">= 22.0.0"
   },
   "scripts": {
-    "test": "mocha src/node-cache.test.js -R spec && tsc"
+    "test:one": "mocha src/node-cache.test.js -R spec && tsc",
+    "test:watch": "nodemon -e js -w ./src --exec 'npm run test:one'"
   },
   "dependencies": {
     "@markusberg/clone": "^3.0.1"
@@ -60,6 +61,7 @@
   "devDependencies": {
     "@types/node": "^22.19.3",
     "mocha": "^11.7.5",
+    "nodemon": "^3.1.11",
     "should": "^13.2.3",
     "typescript": "^5.9.3"
   }

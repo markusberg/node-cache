@@ -1137,14 +1137,13 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         }, 500)
       })
       it('test issue #78 with expire event not fired', function (done) {
-        var expCount, expkeys, localCacheTTL2
         this.timeout(6000)
-        localCacheTTL2 = new nodeCache({
+        const localCacheTTL2 = new nodeCache({
           stdTTL: 1,
           checkperiod: 0.5,
         })
-        expCount = 0
-        expkeys = ['ext78_test:a', 'ext78_test:b']
+        let expCount = 0
+        const expkeys = ['ext78_test:a', 'ext78_test:b']
         localCacheTTL2.set(expkeys[0], expkeys[0], 2)
         localCacheTTL2.set(expkeys[1], expkeys[1], 3)
         localCacheTTL2.on('expired', function (key, value) {

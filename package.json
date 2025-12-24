@@ -59,17 +59,18 @@
     "prep": "npm install && husky && chmod ug+x .husky/*",
     "prepublishOnly": "npm run build",
     "test": "npm run clean && npm run test:one",
-    "test:one": "npm run build:test && mocha ./dist/node-cache.test.js -R spec",
+    "test:one": "npm run build:test && node --enable-source-maps --test --experimental-test-coverage --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=./coverage/lcov.info './dist/**/*.test.js' && npm run test:cov",
+    "test:cov": "lcov-parse --summary ./coverage/lcov.info > ./coverage/coverage-summary.json",
     "test:watch": "npm run clean && nodemon -e ts -w ./src --exec 'npm run test:one'"
   },
   "dependencies": {
     "@markusberg/clone": "^3.0.1"
   },
   "devDependencies": {
-    "@types/node": "^22.19.3",
+    "@markusberg/lcov-parse": "^3.0.0",
+    "@types/node": "^24.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
-    "mocha": "^11.7.5",
     "nodemon": "^3.1.11",
     "prettier": "^3.7.4",
     "rimraf": "^6.1.2",

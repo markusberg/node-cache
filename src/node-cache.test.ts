@@ -1,48 +1,44 @@
-var localCache, localCacheNoDelete, localCacheTTL
-
 import { readFileSync } from 'node:fs'
-import nodeCache from './node-cache.js'
-import { randomNumber, randomString, diffKeys } from './helpers.js'
+import { strict as assert } from 'node:assert'
+
 import clone from '@markusberg/clone'
 import { beforeEach, describe, it, before, after } from 'mocha'
 
-import should from 'should'
+import nodeCache from './node-cache.js'
+import { randomNumber, randomString, diffKeys } from './helpers.js'
+
+import type { Key } from './interfaces.js'
 
 const pkg = JSON.parse(readFileSync('package.json').toString())
 
-localCache = new nodeCache({ stdTTL: 0 })
+let localCache: any = new nodeCache({ stdTTL: 0 })
 
-localCacheTTL = new nodeCache({
+let localCacheTTL: any = new nodeCache({
   stdTTL: 0.3,
   checkperiod: 0,
-})
-
-localCacheNoDelete = new nodeCache({
-  stdTTL: 0.3,
-  checkperiod: 0,
-  deleteOnExpire: false,
 })
 
 let BENCH = {}
 
 // just for testing disable the check period
-localCache._killCheckPeriod()
+localCache.close()
 
-describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, function () {
-  after(function () {
-    var ops, txt, type
-    txt = `Benchmark node@${process.version}:`
-    for (type in BENCH) {
-      ops = BENCH[type]
+describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => {
+  after(() => {
+    let txt = `Benchmark node@${process.version}:`
+    for (const type in BENCH) {
+      const ops = BENCH[type]
       txt += `\n   - ${type}: ${ops.toFixed(1)} ops/s`
     }
     console.log(txt)
   })
+
   describe('general sync-style', () => {
     let state
+    let localCache
 
-    before(function () {
-      localCache.flushAll()
+    before(() => {
+      localCache = new nodeCache({ stdTTL: 0 })
       state = {
         start: clone(localCache.getStats()),
         value: randomString(100),
@@ -59,290 +55,247 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         otp: randomString(10),
       }
     })
-    it('set key', function () {
-      var res
-      res = localCache.set(state.key, state.value, 0)
-      true.should.eql(res)
-      ;(1).should.eql(localCache.getStats().keys - state.start.keys)
+    after(() => {
+      localCache.close()
     })
-    it('get key', function () {
-      var res
-      res = localCache.get(state.key)
-      state.value.should.eql(res)
+    it('set key', () => {
+      const res = localCache.set(state.key, state.value, 0)
+      assert.equal(true, res)
+      assert.equal(1, localCache.getStats().keys - state.start.keys)
     })
-    it('get key names', function () {
-      var res
-      res = localCache.keys()
-      ;[state.key].should.eql(res)
+    it('get key', () => {
+      const res = localCache.get(state.key)
+      assert.equal(state.value, res)
     })
-    it('has key', function () {
-      var res
-      res = localCache.has(state.key)
-      res.should.eql(true)
+    it('get key names', () => {
+      const res = localCache.keys()
+      assert.deepEqual(res, [state.key])
     })
-    it('does not have key', function () {
-      var res
-      res = localCache.has('non existing key')
-      res.should.eql(false)
+    it('has key', () => {
+      const res = localCache.has(state.key)
+      assert.equal(true, res)
     })
-    it('delete an undefined key', function () {
-      var count
-      count = localCache.del('xxx')
-      ;(0).should.eql(count)
+    it('does not have key', () => {
+      const res = localCache.has('non existing key')
+      assert.equal(false, res)
     })
-    it('take key', function () {
-      var otp, res
+    it('delete an undefined key', () => {
+      const count = localCache.del('xxx')
+      assert.equal(0, count)
+    })
+    it('take key', () => {
       // make sure we are starting fresh
-      res = localCache.has('otp')
-      res.should.eql(false)
+      const testKey = 'otp'
+      const testValue = 'some other value'
+      assert.equal(false, localCache.has(testKey))
+
       // taking a non-exitent value should be fine
-      res = localCache.take('otp')
-      should.not.exist(res)
+      assert.equal(undefined, localCache.take(testKey))
+
       // check if otp insertion suceeded
-      res = localCache.set('otp', state.otp, 0)
-      true.should.eql(res)
+      assert.equal(true, localCache.set(testKey, state.otp, 0))
       // are we able to check the presence of the key?
-      res = localCache.has('otp')
-      res.should.eql(true)
+
+      assert.equal(true, localCache.has(testKey))
+
       // not once, but twice?
       // This proves that keys can be accessed as many times as required, but
       // not the value. The `take()` method makes the values as single-read, not the keys.
-      res = localCache.has('otp')
-      res.should.eql(true)
+      assert.equal(true, localCache.has(testKey))
+
       // take the value
-      otp = localCache.take('otp')
-      otp.should.eql(state.otp)
+      assert.equal(state.otp, localCache.take(testKey))
+
       // key should not be present anymore once the value is read
-      res = localCache.has('otp')
-      res.should.eql(false)
+      assert.equal(false, localCache.has(testKey))
+
       // and, re-insertions are not probhitied
-      res = localCache.set('otp', 'some other value')
-      true.should.eql(res)
+      assert.equal(true, localCache.set(testKey, testValue))
+
       // should be able take the value again
-      otp = localCache.take('otp')
-      otp.should.eql('some other value')
+      assert.equal(testValue, localCache.take(testKey))
+
       // key should not be present anymore, again
-      res = localCache.has('otp')
-      res.should.eql(false)
+      assert.equal(false, localCache.has(testKey))
     })
-    it('take key with falsy values', function () {
-      var otp, res
+    it('take key with falsy values', () => {
       // make sure we are starting fresh
-      res = localCache.has('otp')
-      res.should.eql(false)
+      const testKey = 'otp'
+      assert.equal(false, localCache.has(testKey))
+
       // insert a falsy value and take it
-      res = localCache.set('otp', 0)
-      true.should.eql(res)
-      otp = localCache.take('otp')
-      otp.should.eql(0)
+      assert.equal(true, localCache.set(testKey, 0))
+
+      assert.equal(0, localCache.take(testKey))
+
       // key should not exist anymore
-      res = localCache.has('otp')
-      res.should.eql(false)
+      assert.equal(false, localCache.has(testKey))
     })
-    it('update key (and get it to check if the update worked)', function () {
-      var res
-      res = localCache.set(state.key, state.value2, 0)
-      true.should.eql(res)
+    it('update key (and get it to check if the update worked)', () => {
+      let res = localCache.set(state.key, state.value2, 0)
+      assert.equal(true, res)
       // check if the update worked
       res = localCache.get(state.key)
-      state.value2.should.eql(res)
+      assert.equal(state.value2, res)
       // stats should not have changed
-      ;(1).should.eql(localCache.getStats().keys - state.start.keys)
+      assert.equal(1, localCache.getStats().keys - state.start.keys)
     })
-    it('delete the defined key', function () {
-      var count
-      localCache.once('del', function (key, val) {
-        state.key.should.eql(key)
-        state.value2.should.eql(val)
+    it('delete the defined key', () => {
+      localCache.once('del', (key: unknown, val: unknown) => {
+        assert.equal(state.key, key)
+        assert.equal(state.value2, val)
       })
-      count = localCache.del(state.key)
-      ;(1).should.eql(count)
+      const count = localCache.del(state.key)
+      assert.equal(1, count)
       // check stats
-      ;(0).should.eql(localCache.getStats().keys - state.start.keys)
+      assert.equal(0, localCache.getStats().keys - state.start.keys)
     })
-    it('delete multiple keys (after setting them)', function () {
-      var count, keys, res
-      keys = ['multiA', 'multiB', 'multiC']
+    it('delete multiple keys (after setting them)', () => {
+      const keys = ['multiA', 'multiB', 'multiC']
+
       // set the keys
-      keys.forEach(function (key) {
-        var res
-        res = localCache.set(key, state.value3)
-        true.should.eql(res)
-      })
+      for (const key of keys) {
+        const res = localCache.set(key, state.value3)
+        assert.equal(true, res)
+      }
+
       // check the keys
-      keys.forEach(function (key) {
-        var res
-        res = localCache.get(key)
-        state.value3.should.eql(res)
-      })
+      for (const key of keys) {
+        const res = localCache.get(key)
+        assert.equal(state.value3, res)
+      }
+
       // delete 2 of those keys
-      count = localCache.del(keys.slice(0, 2))
-      ;(2).should.eql(count)
+      assert.equal(2, localCache.del(keys.slice(0, 2)))
+
       // try to get the deleted keys
-      keys.slice(0, 2).forEach(function (key) {
-        var res
-        res = localCache.get(key)
-        should(res).be.undefined()
-      })
+      for (const key of keys.slice(0, 2)) {
+        assert.equal(undefined, localCache.get(key))
+      }
+
       // get the not deleted key
-      res = localCache.get(keys[2])
-      state.value3.should.eql(res)
+      assert.equal(state.value3, localCache.get(keys[2]))
+
       // delete this key, too
-      count = localCache.del(keys[2])
-      ;(1).should.eql(count)
+      assert.equal(1, localCache.del(keys[2]))
+
       // try get the deleted key
-      res = localCache.get(keys[2])
-      should(res).be.undefined()
+      assert.equal(undefined, localCache.get(keys[2]))
+
       // re-deleting the keys should not have to delete an actual key
-      count = localCache.del(keys)
-      ;(0).should.eql(count)
+      assert.equal(0, localCache.del(keys))
     })
-    it('set a key to 0', function () {
-      var res
-      res = localCache.set('zero', 0)
-      true.should.eql(res)
+    it('set a key to 0', () => {
+      const res = localCache.set('zero', 0)
+      assert.equal(true, res)
     })
-    it('get previously set key', function () {
-      var res
-      res = localCache.get('zero')
-      ;(0).should.eql(res)
+    it('get previously set key', () => {
+      const res = localCache.get('zero')
+      assert.equal(0, res)
     })
-    it('set a key to an object clone', function () {
-      var res
-      res = localCache.set('clone', state.obj)
-      true.should.eql(res)
+    it('set a key to an object clone', () => {
+      const res = localCache.set('clone', state.obj)
+      assert.equal(true, res)
     })
-    it('get cloned object', function () {
-      var res, res2
-      res = localCache.get('clone')
+    it('get cloned object', () => {
+      const res = localCache.get('clone')
       // should not be === equal
-      state.obj.should.not.equal(res)
+      assert.notEqual(state.obj, res)
+
       // but should deep equal
-      state.obj.should.eql(res)
+      assert.deepEqual(state.obj, res)
       res.b.y = 42
-      res2 = localCache.get('clone')
-      state.obj.should.eql(res2)
+      const res2 = localCache.get('clone')
+      assert.deepEqual(state.obj, res2)
     })
     it('test promise storage (fulfill before adding to cache)', function (done) {
-      var deferred_value, p, q
-      deferred_value = 'Some deferred value'
-      if (typeof Promise !== 'undefined' && Promise !== null) {
-        p = new Promise(function (fulfill, reject) {
-          fulfill(deferred_value)
-        })
-        p.then(function (value) {
-          deferred_value.should.eql(value)
-        })
-        localCache.set('promise', p)
-        q = localCache.get('promise')
-        q.then(function (value) {
-          done()
-        })
-      } else {
-        if (process.env.SILENT_MODE == null) {
-          console.log(
-            `No Promises available in this node version (${process.version})`,
-          )
-        }
-        this.skip()
-      }
+      const deferred_value = 'Some deferred value'
+      const p = new Promise((fulfill, _reject) => {
+        fulfill(deferred_value)
+      })
+      p.then((value) => {
+        assert.equal(deferred_value, value)
+      })
+      localCache.set('promise', p)
+      const q = localCache.get('promise')
+      q.then(() => done())
     })
+
     it('test promise storage (fulfill after adding to cache)', function (done) {
-      var callStub, called, deferred_value, p, q
-      deferred_value = 'Some deferred value'
-      if (typeof Promise !== 'undefined' && Promise !== null) {
-        called = 0
-        callStub = function () {
-          called++
-          if (called === 2) {
-            done()
-          }
+      const deferred_value = 'Some deferred value'
+      let called = 0
+      const callStub = () => {
+        called++
+        if (called === 2) {
+          done()
         }
-        p = new Promise(function (fulfill, reject) {
-          var fulfiller
-          fulfiller = function () {
-            fulfill(deferred_value)
-          }
-          setTimeout(fulfiller, 250)
-        })
-        p.then(function (value) {
-          deferred_value.should.eql(value)
-          callStub()
-        })
-        localCache.set('promise', p)
-        q = localCache.get('promise')
-        q.then(function (value) {
-          deferred_value.should.eql(value)
-          callStub()
-        })
-      } else {
-        if (process.env.SILENT_MODE == null) {
-          console.log(
-            `No Promises available in this node version (${process.version})`,
-          )
-        }
-        this.skip()
       }
+      const p = new Promise((fulfill, _reject) => {
+        const fulfiller = () => {
+          fulfill(deferred_value)
+        }
+        setTimeout(fulfiller, 250)
+      })
+      p.then((value) => {
+        assert.equal(deferred_value, value)
+        callStub()
+      })
+      localCache.set('promise', p)
+      const q = localCache.get('promise')
+      q.then((value) => {
+        assert.equal(deferred_value, value)
+        callStub()
+      })
     })
     it('test es6 map', function () {
-      var cached_map, key, map
-      if (typeof Map === 'undefined' || Map === null) {
-        if (process.env.SILENT_MODE == null) {
-          console.log(
-            `No Maps available in this node version (${process.version})`,
-          )
-        }
-        this.skip()
-        return
-      }
-      key = randomString(10)
-      map = new Map([
+      const testKey = randomString(10)
+      const map = new Map([
         ['firstkey', 'firstvalue'],
         ['2ndkey', '2ndvalue'],
         ['thirdkey', 'thirdvalue'],
       ])
-      localCache.set(key, map)
+      localCache.set(testKey, map)
       map.set('fourthkey', 'fourthvalue')
-      cached_map = localCache.get(key)
-      should(cached_map.get('2ndkey')).eql('2ndvalue')
-      should(cached_map.get('fourthkey')).be.undefined()
+      const cached_map = localCache.get(testKey)
+      assert.equal(cached_map.get('2ndkey'), '2ndvalue')
+      assert.equal(cached_map.get('fourthkey'), undefined)
     })
-    it('test `useClones = true` with an Object', function () {
-      var c, key, value
-      key = randomString(10)
-      value = {
+    it('test `useClones = true` with an Object', () => {
+      const testKey = randomString(10)
+      const value = {
         a: 123,
         b: 456,
       }
-      c = 789
-      localCache.set(key, value)
+      const c = 789
+      localCache.set(testKey, value)
       value.a = c
-      value.should.not.be.eql(localCache.get(key))
+      assert.notEqual(value, localCache.get(testKey))
     })
-    it('test `useClones = false` with an Object', function () {
+
+    it('test `useClones = false` with an Object', () => {
       const localCacheNoClone = new nodeCache({
         stdTTL: 0,
         useClones: false,
         checkperiod: 0,
       })
 
-      var c, key, value
-      key = randomString(10)
-      value = {
+      const testKey = randomString(10)
+      const value = {
         a: 123,
         b: 456,
       }
-      c = 789
-      localCacheNoClone.set(key, value)
+      const c = 789
+      localCacheNoClone.set(testKey, value)
       value.a = c
-      should(value === localCacheNoClone.get(key)).be.true()
+      assert.equal(value, localCacheNoClone.get(testKey))
     })
   })
-  describe('max key amount', function () {
+
+  describe('max key amount', () => {
     let state
     const localCacheMaxKeys = new nodeCache({ maxKeys: 2 })
 
-    before(function () {
+    before(() => {
       state = {
         key1: randomString(10),
         key2: randomString(10),
@@ -352,31 +305,27 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         value3: randomString(10),
       }
     })
-    it('exceed max key size', function () {
-      var setKey, setKey2
-      setKey = localCacheMaxKeys.set(state.key1, state.value1, 0)
-      true.should.eql(setKey)
-      setKey2 = localCacheMaxKeys.set(state.key2, state.value2, 0)
-      true.should.eql(setKey2)
-      ;(function () {
-        return localCacheMaxKeys.set(state.key3, state.value3, 0)
-      }).should.throw({
+    it('exceed max key size', () => {
+      const setKey = localCacheMaxKeys.set(state.key1, state.value1, 0)
+      assert.equal(true, setKey)
+      const setKey2 = localCacheMaxKeys.set(state.key2, state.value2, 0)
+      assert.equal(true, setKey2)
+      assert.throws(() => localCacheMaxKeys.set(state.key3, state.value3, 0), {
         name: 'ECACHEFULL',
         message: 'Cache max keys amount exceeded',
       })
     })
-    it('remove a key and set another one', function () {
-      var del, setKey3
-      del = localCacheMaxKeys.del(state.key1)
-      ;(1).should.eql(del)
-      setKey3 = localCacheMaxKeys.set(state.key3, state.value3, 0)
-      true.should.eql(setKey3)
+    it('remove a key and set another one', () => {
+      const del = localCacheMaxKeys.del(state.key1)
+      assert.equal(1, del)
+      const setKey3 = localCacheMaxKeys.set(state.key3, state.value3, 0)
+      assert.equal(true, setKey3)
     })
   })
-  describe('correct and incorrect key types', function () {
-    describe('number', function () {
+  describe('correct and incorrect key types', () => {
+    describe('number', () => {
       let state
-      before(function () {
+      before(() => {
         state = {
           keys: [],
           val: randomString(20),
@@ -385,66 +334,60 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
           state.keys.push(randomNumber(100000))
         }
       })
-      it('set', function () {
-        var j, key, len, ref, res
-        ref = state.keys
-        for (j = 0, len = ref.length; j < len; j++) {
-          key = ref[j]
-          res = localCache.set(key, state.val)
-          true.should.eql(res)
+      it('set', () => {
+        for (const key of state.keys) {
+          const res = localCache.set(key, state.val)
+          assert.equal(true, res)
         }
       })
-      it('get', function () {
-        var res
-        res = localCache.get(state.keys[0])
-        state.val.should.eql(res)
+      it('get', () => {
+        const res = localCache.get(state.keys[0])
+        assert.equal(state.val, res)
       })
-      it('mget', function () {
-        var prediction, res
-        res = localCache.mget(state.keys.slice(0, 2))
+      it('mget', () => {
+        const res = localCache.mget(state.keys.slice(0, 2))
+
         // generate prediction
-        prediction = {}
+        const prediction = {}
         prediction[state.keys[0]] = state.val
         prediction[state.keys[1]] = state.val
-        prediction.should.eql(res)
+        assert.deepEqual(prediction, res)
       })
-      it('del single', function () {
-        var count
-        count = localCache.del(state.keys[0])
-        ;(1).should.eql(count)
+      it('del single', () => {
+        const count = localCache.del(state.keys[0])
+        assert.equal(1, count)
       })
-      it('del multi', function () {
-        var count
-        count = localCache.del(state.keys.slice(1, 3))
-        ;(2).should.eql(count)
+      it('del multi', () => {
+        const count = localCache.del(state.keys.slice(1, 3))
+        assert.equal(2, count)
       })
       it('ttl', function (done) {
-        var res, success
-        success = localCache.ttl(state.keys[3], 0.3)
-        true.should.eql(success)
-        res = localCache.get(state.keys[3])
-        state.val.should.eql(res)
-        setTimeout(function () {
-          res = localCache.get(state.keys[3])
-          should.not.exist(res)
+        const success = localCache.ttl(state.keys[3], 0.3)
+        assert.equal(true, success)
+        const res = localCache.get(state.keys[3])
+        assert.equal(state.val, res)
+        setTimeout(() => {
+          const res = localCache.get(state.keys[3])
+          assert.equal(undefined, res)
           done()
         }, 400)
       })
-      it('getTtl', function () {
-        var now, ref, success, ttl
-        now = Date.now()
-        success = localCache.ttl(state.keys[4], 0.5)
-        true.should.eql(success)
-        ttl = localCache.getTtl(state.keys[4])
-        ;(485 < (ref = ttl - now) && ref < 510).should.eql(true)
+      it('getTtl', () => {
+        const now = Date.now()
+        const success = localCache.ttl(state.keys[4], 0.5)
+        assert.equal(true, success)
+        const ttl = localCache.getTtl(state.keys[4])
+        const ref = ttl - now
+        assert.equal(true, 485 < ref)
+        assert.equal(true, ref < 510)
       })
-      after(function () {
+      after(() => {
         localCache.flushAll(false)
       })
     })
-    describe('string', function () {
+    describe('string', () => {
       let state
-      before(function () {
+      before(() => {
         state = {
           keys: [],
           val: randomString(20),
@@ -453,135 +396,114 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
           state.keys.push(randomString(10))
         }
       })
-      it('set', function () {
-        var j, key, len, ref, res
-        ref = state.keys
-        for (j = 0, len = ref.length; j < len; j++) {
-          key = ref[j]
-          res = localCache.set(key, state.val)
-          true.should.eql(res)
+      it('set', () => {
+        for (const key of state.keys) {
+          const res = localCache.set(key, state.val)
+          assert.equal(true, res)
         }
       })
-      it('get', function () {
-        var res
-        res = localCache.get(state.keys[0])
-        state.val.should.eql(res)
+      it('get', () => {
+        const res = localCache.get(state.keys[0])
+        assert.equal(state.val, res)
       })
-      it('mget', function () {
-        var prediction, res
-        res = localCache.mget(state.keys.slice(0, 2))
+      it('mget', () => {
+        const res = localCache.mget(state.keys.slice(0, 2))
         // generate prediction
-        prediction = {}
+        const prediction = {}
         prediction[state.keys[0]] = state.val
         prediction[state.keys[1]] = state.val
-        prediction.should.eql(res)
+        assert.deepEqual(prediction, res)
       })
-      it('del single', function () {
-        var count
-        count = localCache.del(state.keys[0])
-        ;(1).should.eql(count)
+      it('del single', () => {
+        const count = localCache.del(state.keys[0])
+        assert.equal(1, count)
       })
-      it('del multi', function () {
-        var count
-        count = localCache.del(state.keys.slice(1, 3))
-        ;(2).should.eql(count)
+      it('del multi', () => {
+        const count = localCache.del(state.keys.slice(1, 3))
+        assert.equal(2, count)
       })
       it('ttl', function (done) {
-        var res, success
-        success = localCache.ttl(state.keys[3], 0.3)
-        true.should.eql(success)
-        res = localCache.get(state.keys[3])
-        state.val.should.eql(res)
-        setTimeout(function () {
-          res = localCache.get(state.keys[3])
-          should.not.exist(res)
+        const success = localCache.ttl(state.keys[3], 0.3)
+        assert.equal(true, success)
+        const res = localCache.get(state.keys[3])
+        assert.equal(state.val, res)
+        setTimeout(() => {
+          const res = localCache.get(state.keys[3])
+          assert.equal(undefined, res)
           done()
         }, 400)
       })
-      it('getTtl', function () {
-        var now, ref, success, ttl
-        now = Date.now()
-        success = localCache.ttl(state.keys[4], 0.5)
-        true.should.eql(success)
-        ttl = localCache.getTtl(state.keys[4])
-        ;(485 < (ref = ttl - now) && ref < 510).should.eql(true)
+      it('getTtl', () => {
+        const now = Date.now()
+        const success = localCache.ttl(state.keys[4], 0.5)
+        assert.equal(true, success)
+        const ttl = localCache.getTtl(state.keys[4])
+        const ref = ttl - now
+        assert.equal(true, 485 < ref)
+        assert.equal(true, ref < 510)
       })
     })
-    describe('boolean - invalid type', function () {
+    describe('boolean - invalid type', () => {
       let state
-      before(function () {
+      before(() => {
         state = {
           keys: [true, false],
           val: randomString(20),
         }
       })
-      it('set sync-style', function () {
-        ;(function () {
-          return localCache.set(state.keys[0], state.val)
-        }).should.throw({
+      it('set sync-style', () => {
+        assert.throws(() => localCache.set(state.keys[0], state.val), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `boolean`',
         })
       })
-      it('get sync-style', function () {
-        ;(function () {
-          return localCache.get(state.keys[0])
-        }).should.throw({
+      it('get sync-style', () => {
+        assert.throws(() => localCache.get(state.keys[0]), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `boolean`',
         })
       })
-      it('mget sync-style', function () {
-        ;(function () {
-          return localCache.mget(state.keys)
-        }).should.throw({
+      it('mget sync-style', () => {
+        assert.throws(() => localCache.mget(state.keys), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `boolean`',
         })
       })
-      it('del single sync-style', function () {
-        ;(function () {
-          return localCache.del(state.keys[0])
-        }).should.throw({
+      it('del single sync-style', () => {
+        assert.throws(() => localCache.del(state.keys[0]), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `boolean`',
         })
       })
-      it('del multi sync-style', function () {
-        ;(function () {
-          return localCache.del(state.keys)
-        }).should.throw({
+      it('del multi sync-style', () => {
+        assert.throws(() => localCache.del(state.keys), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `boolean`',
         })
       })
-      it('ttl sync-style', function () {
-        ;(function () {
-          return localCache.ttl(state.keys[0], 10)
-        }).should.throw({
+      it('ttl sync-style', () => {
+        assert.throws(() => localCache.ttl(state.keys[0], 10), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `boolean`',
         })
       })
-      return it('getTtl sync-style', function () {
-        ;(function () {
-          return localCache.getTtl(state.keys[0])
-        }).should.throw({
+      return it('getTtl sync-style', () => {
+        assert.throws(() => localCache.getTtl(state.keys[0]), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `boolean`',
         })
       })
     })
-    describe('object - invalid type', function () {
+    describe('object - invalid type', () => {
       let state
-      before(function () {
+      before(() => {
         state = {
           keys: [
             {
@@ -594,64 +516,50 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
           val: randomString(20),
         }
       })
-      it('set sync-style', function () {
-        ;(function () {
-          return localCache.set(state.keys[0], state.val)
-        }).should.throw({
+      it('set sync-style', () => {
+        assert.throws(() => localCache.set(state.keys[0], state.val), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `object`',
         })
       })
-      it('get sync-style', function () {
-        ;(function () {
-          return localCache.get(state.keys[0])
-        }).should.throw({
+      it('get sync-style', () => {
+        assert.throws(() => localCache.get(state.keys[0]), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `object`',
         })
       })
-      it('mget sync-style', function () {
-        ;(function () {
-          return localCache.mget(state.keys)
-        }).should.throw({
+      it('mget sync-style', () => {
+        assert.throws(() => localCache.mget(state.keys), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `object`',
         })
       })
-      it('del single sync-style', function () {
-        ;(function () {
-          return localCache.del(state.keys[0])
-        }).should.throw({
+      it('del single sync-style', () => {
+        assert.throws(() => localCache.del(state.keys[0]), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `object`',
         })
       })
-      it('del multi sync-style', function () {
-        ;(function () {
-          return localCache.del(state.keys)
-        }).should.throw({
+      it('del multi sync-style', () => {
+        assert.throws(() => localCache.del(state.keys), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `object`',
         })
       })
-      it('ttl sync-style', function () {
-        ;(function () {
-          return localCache.ttl(state.keys[0], 10)
-        }).should.throw({
+      it('ttl sync-style', () => {
+        assert.throws(() => localCache.ttl(state.keys[0], 10), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `object`',
         })
       })
-      return it('getTtl sync-style', function () {
-        ;(function () {
-          return localCache.getTtl(state.keys[0])
-        }).should.throw({
+      it('getTtl sync-style', () => {
+        assert.throws(() => localCache.getTtl(state.keys[0]), {
           name: 'EKEYTYPE',
           message:
             'The key argument has to be of type `string` or `number`. Found: `object`',
@@ -659,9 +567,9 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       })
     })
   })
-  describe('flush', function () {
+  describe('flush', () => {
     let state
-    before(function () {
+    before(() => {
       state = {
         n: 0,
         count: 100,
@@ -670,53 +578,45 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         val: randomString(20),
       }
     })
-    it('set keys', function () {
-      var j, key, ref
-      for (
-        j = 1, ref = state.count;
-        1 <= ref ? j <= ref : j >= ref;
-        1 <= ref ? j++ : j--
-      ) {
-        key = randomString(7)
+    it('set keys', () => {
+      for (let j = 0; j < state.count; j++) {
+        const key = randomString(7)
         state.keys.push(key)
-      }
-      state.keys.forEach(function (key) {
         localCache.set(key)
         state.n++
-      })
-      state.count.should.eql(state.n)
-      ;(state.startKeys + state.count).should.eql(localCache.getStats().keys)
+      }
+      assert.equal(state.count, state.n)
+      assert.equal(state.startKeys + state.count, localCache.getStats().keys)
     })
-    it('flush keys', function () {
+    it('flush keys', () => {
       localCache.flushAll(false)
-      ;(0).should.eql(localCache.getStats().keys)
-      ;({}).should.eql(localCache.data)
+      assert.equal(0, localCache.getStats().keys)
+      assert.deepEqual({}, localCache.data)
     })
   })
-  describe('flushStats', function () {
-    var cache
-    cache = null
-    before(function () {
+  describe('flushStats', () => {
+    let cache = null
+    before(() => {
       cache = new nodeCache()
     })
-    it('set cache and flush stats value', function () {
+    it('set cache and flush stats value', () => {
       var key, res, value
       key = randomString(10)
       value = randomString(10)
       res = cache.set(key, value)
-      true.should.eql(res)
-      ;(1).should.eql(cache.getStats().keys)
+      assert.equal(true, res)
+      assert.equal(1, cache.getStats().keys)
       cache.flushStats()
-      ;(0).should.eql(cache.getStats().keys)
+      assert.equal(0, cache.getStats().keys)
       cache.get(key)
-      ;(1).should.eql(cache.getStats().hits)
+      assert.equal(1, cache.getStats().hits)
       cache.get(randomString(10))
-      ;(1).should.eql(cache.getStats().misses)
+      assert.equal(1, cache.getStats().misses)
     })
   })
-  describe('many', function () {
+  describe('many', () => {
     let state
-    return before(function () {
+    return before(() => {
       state = {
         n: 0,
         count: 100000,
@@ -729,12 +629,12 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       }
     })
   })
-  describe('delete', () => {
+  describe('delete', function () {
     this.timeout(0)
 
     let state
 
-    before(function () {
+    before(() => {
       state = {
         n: 0,
         count: 100000,
@@ -748,28 +648,28 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       }
     })
 
-    it('delete all previously set keys', function () {
+    it('delete all previously set keys', () => {
       for (let i = 0; i < state.count; i++) {
-        ;(1).should.eql(localCache.del(state.keys[i]))
+        assert.equal(1, localCache.del(state.keys[i]))
         state.n++
       }
-      state.n.should.eql(state.count)
-      localCache.getStats().keys.should.eql(0)
+      assert.equal(state.n, state.count)
+      assert.equal(0, localCache.getStats().keys)
     })
 
-    it('delete keys again; should not delete anything', function () {
+    it('delete keys again; should not delete anything', () => {
       for (let i = 0; i < state.count; i++) {
-        ;(0).should.eql(localCache.del(state.keys[i]))
+        assert.equal(0, localCache.del(state.keys[i]))
         state.n++
       }
-      state.n.should.eql(state.count * 2)
-      return localCache.getStats().keys.should.eql(0)
+      assert.equal(state.n, state.count * 2)
+      assert.equal(0, localCache.getStats().keys)
     })
   })
-  describe('stats', function () {
+  describe('stats', () => {
     let state
 
-    before(function () {
+    before(() => {
       state = {
         n: 0,
         start: clone(localCache.getStats()),
@@ -784,44 +684,44 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         const value = randomString(state.valuelength)
         state.keys.push(key)
         state.values.push(value)
-        true.should.eql(localCache.set(key, value, 0))
+        assert.equal(true, localCache.set(key, value, 0))
         state.n++
       }
     })
-    it('get and remove `count` elements', function () {
+    it('get and remove `count` elements', () => {
       for (let i = 0; i < state.count; i++) {
-        state.values[i].should.eql(localCache.get(state.keys[i]))
+        assert.equal(state.values[i], localCache.get(state.keys[i]))
         state.n++
       }
       for (let i = 0; i < state.count; i++) {
-        ;(1).should.eql(localCache.del(state.keys[i]))
+        assert.equal(1, localCache.del(state.keys[i]))
         state.n++
       }
       const after = localCache.getStats()
       const diff = diffKeys(after, state.start)
-      diff.hits.should.eql(5)
-      diff.keys.should.eql(5)
-      diff.ksize.should.eql(state.count * state.keylength)
-      diff.vsize.should.eql(state.count * state.valuelength)
+      assert.equal(diff.hits, 5)
+      assert.equal(diff.keys, 5)
+      assert.equal(diff.ksize, state.count * state.keylength)
+      assert.equal(diff.vsize, state.count * state.valuelength)
     })
-    it('generate `count` misses', function () {
+    it('generate `count` misses', () => {
       for (let i = 0; i < state.count; i++) {
         // 4 char key should not exist
-        should(localCache.get('xxxx')).be.undefined()
+        assert.equal(undefined, localCache.get('xxxx'))
         state.n++
       }
       const after = localCache.getStats()
       const diff = diffKeys(after, state.start)
-      diff.misses.should.eql(5)
+      assert.equal(diff.misses, 5)
     })
-    it('check successful runs', function () {
-      state.n.should.eql(5 * state.count)
+    it('check successful runs', () => {
+      assert.equal(state.n, 5 * state.count)
     })
   })
-  describe('multi', function () {
+  describe('multi', () => {
     let state
 
-    before(function () {
+    before(() => {
       state = {
         n: 0,
         count: 100,
@@ -838,46 +738,41 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         state.n++
       }
     })
-    it('generate a sub-list of keys', function () {
+    it('generate a sub-list of keys', () => {
       state.getKeys = state.keys.splice(50, 5)
     })
-    it('generate prediction', function () {
-      var j, key, len, ref
+    it('generate prediction', () => {
       state.prediction = {}
-      ref = state.getKeys
-      for (j = 0, len = ref.length; j < len; j++) {
-        key = ref[j]
+      for (const key of state.getKeys) {
         state.prediction[key] = state.value
       }
     })
-    it('try to mget with a single key', function () {
-      ;(function () {
-        return localCache.mget(state.getKeys[0])
-      }).should.throw({
+    it('try to mget with a single key', () => {
+      assert.throws(() => localCache.mget(state.getKeys[0]), {
         name: 'EKEYSTYPE',
         message: 'The keys argument has to be an array.',
       })
       state.n++
     })
-    it('mget the sub-list', function () {
-      state.prediction.should.eql(localCache.mget(state.getKeys))
+    it('mget the sub-list', () => {
+      assert.deepEqual(state.prediction, localCache.mget(state.getKeys))
       state.n++
     })
-    it('delete keys in the sub-list', function () {
-      state.getKeys.length.should.eql(localCache.del(state.getKeys))
+    it('delete keys in the sub-list', () => {
+      assert.equal(state.getKeys.length, localCache.del(state.getKeys))
       state.n++
     })
-    it('try to mget the sub-list again', function () {
-      ;({}).should.eql(localCache.mget(state.getKeys))
+    it('try to mget the sub-list again', () => {
+      assert.deepEqual({}, localCache.mget(state.getKeys))
       state.n++
     })
-    it('check successful runs', function () {
-      state.n.should.eql(state.count + 4)
+    it('check successful runs', () => {
+      assert.equal(state.n, state.count + 4)
     })
   })
-  describe('ttl', function () {
+  describe('ttl', () => {
     let state
-    before(function () {
+    before(() => {
       state = {
         n: 0,
         val: randomString(20),
@@ -891,100 +786,89 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       }
       state.keys = [state.key1, state.key2, state.key3, state.key4, state.key5]
     })
-    describe('has validates expired ttl', function () {
-      it('set a key with ttl', function () {
-        true.should.eql(localCacheTTL.set(state.key6, state.val, 0.7))
+    describe('has validates expired ttl', () => {
+      it('set a key with ttl', () => {
+        assert.equal(true, localCacheTTL.set(state.key6, state.val, 0.7))
       })
-      it('check this key immediately', function () {
-        true.should.eql(localCacheTTL.has(state.key6))
+      it('check this key immediately', () => {
+        assert.equal(true, localCacheTTL.has(state.key6))
       })
       it('before it times out', function (done) {
-        setTimeout(function () {
-          var res
+        setTimeout(() => {
           state.n++
-          res = localCacheTTL.has(state.key6)
-          res.should.eql(true)
-          state.val.should.eql(localCacheTTL.get(state.key6))
+          const res = localCacheTTL.has(state.key6)
+          assert.equal(true, res)
+          assert.equal(state.val, localCacheTTL.get(state.key6))
           done()
         }, 20)
       })
       return it('and after it timed out', function (done) {
-        setTimeout(function () {
-          var res
-          res = localCacheTTL.has(state.key6)
-          res.should.eql(false)
+        setTimeout(() => {
+          const res = localCacheTTL.has(state.key6)
+          assert.equal(false, res)
           state.n++
-          should(localCacheTTL.get(state.key6)).be.undefined()
+          assert.equal(undefined, localCacheTTL.get(state.key6))
           done()
         }, 800)
       })
     })
-    it('set a key with ttl', function () {
-      var res, ts
-      res = localCache.set(state.key1, state.val, 0.7)
-      true.should.eql(res)
-      ts = localCache.getTtl(state.key1)
-      if (state.now < ts && ts < state.now + 300) {
-        throw new Error('Invalid timestamp')
-      }
+    it('set a key with ttl', () => {
+      const res = localCache.set(state.key1, state.val, 0.7)
+      assert.equal(true, res)
+      const ts = localCache.getTtl(state.key1)
+      assert.equal(false, state.now < ts && ts < state.now + 300)
     })
-    it('check this key immediately', function () {
-      state.val.should.eql(localCache.get(state.key1))
+    it('check this key immediately', () => {
+      assert.equal(state.val, localCache.get(state.key1))
     })
     it('before it times out', function (done) {
-      setTimeout(function () {
-        var res
+      setTimeout(() => {
         state.n++
-        res = localCache.has(state.key1)
-        res.should.eql(true)
-        state.val.should.eql(localCache.get(state.key1))
+        const res = localCache.has(state.key1)
+        assert.equal(true, res)
+        assert.equal(state.val, localCache.get(state.key1))
         done()
       }, 20)
     })
     it('and after it timed out', function (done) {
-      setTimeout(function () {
-        var res, ts
-        res = localCache.has(state.key1)
-        res.should.eql(false)
-        ts = localCache.getTtl(state.key1)
-        should.not.exist(ts)
+      setTimeout(() => {
+        const res = localCache.has(state.key1)
+        assert.equal(false, res)
+        const ts = localCache.getTtl(state.key1)
+        assert.equal(undefined, ts)
         state.n++
-        should(localCache.get(state.key1)).be.undefined()
+        assert.equal(undefined, localCache.get(state.key1))
         done()
       }, 700)
     })
-    it('set another key with ttl', function () {
-      var res
-      res = localCache.set(state.key2, state.val, 0.5)
-      true.should.eql(res)
+    it('set another key with ttl', () => {
+      const res = localCache.set(state.key2, state.val, 0.5)
+      assert.equal(true, res)
     })
-    it('check this key immediately', function () {
-      var res
-      res = localCache.get(state.key2)
-      state.val.should.eql(res)
+    it('check this key immediately', () => {
+      const res = localCache.get(state.key2)
+      assert.equal(state.val, res)
     })
-    it('before it times out', function (done) {
-      setTimeout(function () {
+    it('before it times out', (done) => {
+      setTimeout(() => {
         state.n++
-        state.val.should.eql(localCache.get(state.key2))
+        assert.equal(state.val, localCache.get(state.key2))
         done()
       }, 20)
     })
     it('and after it timed out, too', function (done) {
-      setTimeout(function () {
-        var ts
-        ts = localCache.getTtl(state.key2)
-        should.not.exist(ts)
+      setTimeout(() => {
+        const ts = localCache.getTtl(state.key2)
+        assert.equal(undefined, ts)
         state.n++
-        should(localCache.get(state.key2)).be.undefined()
+        assert.equal(undefined, localCache.get(state.key2))
         done()
       }, 500)
     })
     describe('test the automatic check', function (done) {
-      var innerState
-      innerState = null
+      let innerState = null
       before(function (done) {
-        setTimeout(function () {
+        setTimeout(() => {
           innerState = {
             startKeys: localCache.getStats().keys,
             key: 'autotest',
@@ -993,97 +877,99 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
           done()
         }, 1000)
       })
-      it('set a key with ttl', function () {
-        localCache.once('set', function (key) {
-          innerState.key.should.eql(key)
+      it('set a key with ttl', () => {
+        localCache.once('set', (key: Key) => {
+          assert.equal(innerState.key, key)
         })
-        true.should.eql(localCache.set(innerState.key, innerState.val, 0.5))
-        ;(innerState.startKeys + 1).should.eql(localCache.getStats().keys)
+
+        assert.equal(true, localCache.set(innerState.key, innerState.val, 0.5))
+        assert.equal(innerState.startKeys + 1, localCache.getStats().keys)
         // event handler should have been fired
-        ;(0).should.eql(localCache.listeners('set').length)
+        assert.equal(0, localCache.listeners('set').length)
       })
-      it("and check it's existence", function () {
-        innerState.val.should.eql(localCache.get(innerState.key))
+      it("and check it's existence", () => {
+        assert.equal(innerState.val, localCache.get(innerState.key))
       })
       it("wait for 'expired' event", function (done) {
         localCache.once('expired', function (key, val) {
-          innerState.key.should.eql(key)
-          state.keys.includes(key).should.eql(false)
-          should(localCache.data[key]).be.undefined()
+          assert.equal(innerState.key, key)
+          assert.equal(false, state.keys.includes(key))
+          assert.equal(undefined, localCache.data[key])
           done()
         })
-        setTimeout(function () {
+        setTimeout(() => {
           // trigger ttl check, which will trigger the `expired` event
           localCache._checkData(false)
         }, 550)
       })
     })
-    describe('more ttl tests', function () {
-      it('set a third key with ttl', function () {
-        true.should.eql(localCache.set(state.key3, state.val, 100))
+    describe('more ttl tests', () => {
+      it('set a third key with ttl', () => {
+        assert.equal(true, localCache.set(state.key3, state.val, 100))
       })
-      it('check it immediately', function () {
-        state.val.should.eql(localCache.get(state.key3))
+      it('check it immediately', () => {
+        assert.equal(state.val, localCache.get(state.key3))
       })
-      it('set ttl to the invalid key', function () {
-        false.should.eql(localCache.ttl(`${state.key3}false`, 0.3))
+      it('set ttl to the invalid key', () => {
+        assert.equal(false, localCache.ttl(`${state.key3}false`, 0.3))
       })
-      it('set ttl to the correct key', function () {
-        true.should.eql(localCache.ttl(state.key3, 0.3))
+      it('set ttl to the correct key', () => {
+        assert.equal(true, localCache.ttl(state.key3, 0.3))
       })
-      it('check if the key still exists', function () {
-        var res
-        res = localCache.get(state.key3)
-        state.val.should.eql(res)
+      it('check if the key still exists', () => {
+        const res = localCache.get(state.key3)
+        assert.equal(state.val, res)
       })
       it('wait until ttl has ended and check if the key was deleted', function (done) {
-        setTimeout(function () {
-          var res
-          res = localCache.get(state.key3)
-          should(res).be.undefined()
-          should(localCache.data[state.key3]).be.undefined()
+        setTimeout(() => {
+          const res = localCache.get(state.key3)
+          assert.equal(undefined, res)
+          assert.equal(undefined, localCache.data[state.key3])
           done()
         }, 500)
       })
-      it("set a key with ttl = 100s (default: infinite), reset it's ttl to default and check if it still exists", function () {
-        var res
-        true.should.eql(localCache.set(state.key4, state.val, 100))
+      it("set a key with ttl = 100s (default: infinite), reset it's ttl to default and check if it still exists", () => {
+        assert.equal(true, localCache.set(state.key4, state.val, 100))
         // check immediately
-        state.val.should.eql(localCache.get(state.key4))
+        assert.equal(state.val, localCache.get(state.key4))
         // set ttl to false key
-        false.should.eql(localCache.ttl(`${state.key4}false`))
+        assert.equal(false, localCache.ttl(`${state.key4}false`))
         // set default ttl (0) to the right key
-        true.should.eql(localCache.ttl(state.key4))
+        assert.equal(true, localCache.ttl(state.key4))
         // and check if it still exists
-        res = localCache.get(state.key4)
-        state.val.should.eql(res)
+        const res = localCache.get(state.key4)
+        assert.equal(state.val, res)
       })
       it("set a key with ttl = 100s (default: 0.3s), reset it's ttl to default, check if it still exists, and wait for its timeout", function (done) {
-        true.should.eql(localCacheTTL.set(state.key5, state.val, 100))
+        assert.equal(true, localCacheTTL.set(state.key5, state.val, 100))
         // check immediately
-        state.val.should.eql(localCacheTTL.get(state.key5))
+        assert.equal(state.val, localCacheTTL.get(state.key5))
         // set ttl to false key
-        false.should.eql(localCacheTTL.ttl(`${state.key5}false`))
+        assert.equal(false, localCacheTTL.ttl(`${state.key5}false`))
         // set default ttl (0.3) to right key
-        true.should.eql(localCacheTTL.ttl(state.key5))
+        assert.equal(true, localCacheTTL.ttl(state.key5))
         // and check if it still exists
-        state.val.should.eql(localCacheTTL.get(state.key5))
-        setTimeout(function () {
-          var res
-          res = localCacheTTL.get(state.key5)
-          should.not.exist(res)
+        assert.equal(state.val, localCacheTTL.get(state.key5))
+        setTimeout(() => {
+          const res = localCacheTTL.get(state.key5)
+          assert.equal(undefined, res)
           localCacheTTL._checkData(false)
           // deep dirty check if key was deleted
-          should(localCacheTTL.data[state.key5]).be.undefined()
+          assert.equal(undefined, localCacheTTL.data[state.key5])
           done()
         }, 350)
       })
       it('set a key key with a cache initialized with no automatic delete on expire', function (done) {
+        const localCacheNoDelete = new nodeCache({
+          stdTTL: 0.3,
+          checkperiod: 0,
+          deleteOnExpire: false,
+        })
+
         localCacheNoDelete.set(state.key1, state.val)
-        setTimeout(function () {
-          var res
-          res = localCacheNoDelete.get(state.key1)
-          should(res).eql(state.val)
+        setTimeout(() => {
+          const res = localCacheNoDelete.get(state.key1)
+          assert.equal(state.val, res)
           done()
         }, 500)
       })
@@ -1098,44 +984,42 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         localCacheTTL2.set(expkeys[0], expkeys[0], 2)
         localCacheTTL2.set(expkeys[1], expkeys[1], 3)
         localCacheTTL2.on('expired', function (key, value) {
-          key.should.eql(expkeys[expCount])
-          value.should.eql(expkeys[expCount])
+          assert.equal(key, expkeys[expCount])
+          assert.equal(value, expkeys[expCount])
           expCount++
         })
-        return setTimeout(function () {
-          expCount.should.eql(2)
+        return setTimeout(() => {
+          assert.equal(expCount, 2)
           localCacheTTL2.close()
           return done()
         }, 5000)
       })
     })
   })
-  describe('clone', function () {
+  describe('clone', () => {
     it('a function', function (done) {
-      var fn, key, value
-      key = randomString(10)
-      value = function () {
+      const testKey = randomString(10)
+      const testValue = () => {
         done()
       }
-      localCache.set(key, value)
-      fn = localCache.get(key)
+      localCache.set(testKey, testValue)
+      const fn = localCache.get(testKey)
       fn()
     })
-    it('a regex', function () {
-      var cachedRegex, key, match, noMatch, regex
-      key = randomString(10)
-      regex = new RegExp('\\b\\w{4}\\b', 'g')
-      match = 'king'
-      noMatch = 'bla'
-      true.should.eql(regex.test(match))
-      false.should.eql(regex.test(noMatch))
-      localCache.set(key, regex)
-      cachedRegex = localCache.get(key)
-      true.should.eql(cachedRegex.test(match))
-      false.should.eql(cachedRegex.test(noMatch))
+    it('a regex', () => {
+      const testKey = randomString(10)
+      const regex = new RegExp('\\b\\w{4}\\b', 'g')
+      const match = 'king'
+      const noMatch = 'bla'
+      assert.equal(true, regex.test(match))
+      assert.equal(false, regex.test(noMatch))
+      localCache.set(testKey, regex)
+      const cachedRegex = localCache.get(testKey)
+      assert.equal(true, cachedRegex.test(match))
+      assert.equal(false, cachedRegex.test(noMatch))
     })
   })
-  describe('mset', function () {
+  describe('mset', () => {
     let state
     let localCacheMset
 
@@ -1143,7 +1027,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       localCacheMset = new nodeCache({ stdTTL: 0 })
     })
 
-    before(function () {
+    before(() => {
       state = {
         keyValueSet: [
           {
@@ -1157,93 +1041,87 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
         ],
       }
     })
-    it('mset an array of key value pairs', function () {
+    it('mset an array of key value pairs', () => {
       const res = localCacheMset.mset(state.keyValueSet)
-      true.should.eql(res)
-      ;(2).should.eql(localCacheMset.getStats().keys)
+      assert.equal(true, res)
+      assert.equal(2, localCacheMset.getStats().keys)
     })
-    it('mset - integer key', function () {
+    it('mset - integer key', () => {
       state.keyValueSet[0].key = randomNumber(10)
       const res = localCacheMset.mset(state.keyValueSet)
-      true.should.eql(res)
-      ;(2).should.eql(localCacheMset.getStats().keys)
+      assert.equal(true, res)
+      assert.equal(2, localCacheMset.getStats().keys)
     })
-    it('mset - boolean key throw error', function () {
+    it('mset - boolean key throw error', () => {
       state.keyValueSet[0].key = true
-      ;(function () {
-        return localCacheMset.mset(state.keyValueSet)
-      }).should.throw({
+      assert.throws(() => localCacheMset.mset(state.keyValueSet), {
         name: 'EKEYTYPE',
         message:
           'The key argument has to be of type `string` or `number`. Found: `boolean`',
       })
     })
-    it('mset - object key throw error', function () {
+    it('mset - object key throw error', () => {
       state.keyValueSet[0].key = {
         a: 1,
       }
-      ;(function () {
-        return localCacheMset.mset(state.keyValueSet)
-      }).should.throw({
+      assert.throws(() => localCacheMset.mset(state.keyValueSet), {
         name: 'EKEYTYPE',
         message:
           'The key argument has to be of type `string` or `number`. Found: `object`',
       })
     })
-    it('mset - ttl type error check', function () {
+    it('mset - ttl type error check', () => {
       state.keyValueSet[0].ttl = {
         a: 1,
       }
-      ;(function () {
-        return localCacheMset.mset(state.keyValueSet)
-      }).should.throw({
+      assert.throws(() => localCacheMset.mset(state.keyValueSet), {
         name: 'ETTLTYPE',
         message: 'The ttl argument has to be a number.',
       })
     })
   })
-  describe('fetch', function () {
+  describe('fetch', () => {
     let state
 
-    beforeEach(function () {
+    beforeEach(() => {
       localCache.flushAll()
 
       state = {
-        func: function () {
+        func: () => {
           return 'foo'
         },
       }
     })
-    describe('when value is type of Function', function () {
-      return it('execute it and fetch returned value', function () {
-        'foo'.should.eql(localCache.fetch('key', 100, state.func))
+    describe('when value is type of Function', () => {
+      it('execute it and fetch returned value', () => {
+        assert.equal('foo', localCache.fetch('key', 100, state.func))
       })
     })
-    describe('when value is not a function', function () {
-      return it('return the value itself', function () {
-        'bar'.should.eql(localCache.fetch('key', 100, 'bar'))
+    describe('when value is not a function', () => {
+      it('return the value itself', () => {
+        assert.equal('bar', localCache.fetch('key', 100, 'bar'))
       })
     })
-    describe('cache hit', function () {
-      return it('return cached value', function () {
+    describe('cache hit', () => {
+      it('return cached value', () => {
         localCache.set('key', 'bar', 100)
-        'bar'.should.eql(localCache.fetch('key', 100, state.func))
+        assert.equal('bar', localCache.fetch('key', 100, state.func))
       })
     })
-    describe('cache miss', function () {
-      return it('write given value to cache and return it', function () {
-        'foo'.should.eql(localCache.fetch('key', 100, state.func))
-        'foo'.should.eql(localCache.get('key'))
+    describe('cache miss', () => {
+      it('write given value to cache and return it', () => {
+        assert.equal('foo', localCache.fetch('key', 100, state.func))
+        assert.equal('foo', localCache.get('key'))
       })
     })
-    return describe('when ttl is omitted', function () {
-      return it('swap ttl and value', function () {
-        'foo'.should.eql(localCache.fetch('key', state.func))
+    describe('when ttl is omitted', () => {
+      it('swap ttl and value', () => {
+        assert.equal('foo', localCache.fetch('key', state.func))
       })
     })
   })
-  describe('Issues', function () {
-    describe('#151 - cannot set null', function () {
+  describe('Issues', () => {
+    describe('#151 - cannot set null', () => {
       let cache
 
       before(() => {
@@ -1252,53 +1130,52 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, functi
       after(() => {
         cache.close()
       })
-      it('set the value `null` - this should not throw or otherwise fail', function () {
-        cache.set('test', null)
+      it('set the value `null` - this should not throw or otherwise fail', () => {
+        assert.doesNotThrow(() => cache.set('test', null))
       })
-      it('should also return `null`', function () {
-        should(cache.get('test')).be.null()
+      it('should also return `null`', () => {
+        assert.equal(null, cache.get('test'))
       })
     })
 
     // This test is intentionally skipped since v6
-    describe.skip("#197 - ReferenceError: Buffer is not defined (maybe we should have a general 'browser compatibility' test-suite?", function () {
-      var cache, globalBuffer
-      cache = null
-      globalBuffer = global.Buffer
+    describe.skip("#197 - ReferenceError: Buffer is not defined (maybe we should have a general 'browser compatibility' test-suite?", () => {
+      let cache
+      let globalBuffer = global.Buffer
       before(() => {
         // make `Buffer` globally unavailable
         // we have to explicitly set to `undefined` because our `clone` dependency checks for that
         global.Buffer = void 0
         cache = new nodeCache()
       })
-      it('should not throw when setting a key of type `object` (or any other type that gets tested after `Buffer` in `_getValLength()`) when `Buffer` is not available in the global scope', function () {
-        should(Buffer).be.undefined()
+      it('should not throw when setting a key of type `object` (or any other type that gets tested after `Buffer` in `_getValLength()`) when `Buffer` is not available in the global scope', () => {
+        assert.equal(Buffer, undefined)
         cache.set('foo', {})
       })
-      after(function () {
+      after(() => {
         global.Buffer = globalBuffer
         cache.close()
-        should(Buffer).eql(globalBuffer)
+        assert.equal(Buffer, globalBuffer)
       })
     })
 
-    describe('#263 - forceString never works', function () {
-      let cache = null
+    describe('#263 - forceString never works', () => {
+      let cache
       before(() => {
         cache = new nodeCache({ forceString: true })
       })
       after(() => {
         cache.close()
       })
-      it('set the value `null` - this should transform into a string', function () {
+      it('set the value `null` - this should transform into a string', () => {
         cache.set('test', null)
-        should(cache.get('test')).eql('null')
+        assert.equal(cache.get('test'), 'null')
       })
-      it("set the value `{ hello: 'World' }` - this should transform into a string", function () {
+      it("set the value `{ hello: 'World' }` - this should transform into a string", () => {
         cache.set('test', {
           hello: 'World',
         })
-        should(cache.get('test')).eql('{"hello":"World"}')
+        assert.equal(cache.get('test'), '{"hello":"World"}')
       })
     })
   })

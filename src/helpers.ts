@@ -6,17 +6,18 @@
 
   @return {String} generated random string
   */
-export function randomString(length, withnumbers = true) {
-  var chars, i, randomstring, rnum, string_length
-  chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-  if (withnumbers) {
-    chars += '0123456789'
-  }
-  string_length = length || 5
-  randomstring = ''
-  i = 0
+export function randomString(
+  length: number,
+  withnumbers: boolean = true,
+): string {
+  const chars =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' +
+    (withnumbers ? '0123456789' : '')
+  const string_length = length || 5
+  let randomstring = ''
+  let i = 0
   while (i < string_length) {
-    rnum = Math.floor(Math.random() * chars.length)
+    let rnum = Math.floor(Math.random() * chars.length)
     randomstring += chars.substring(rnum, rnum + 1)
     i++
   }
@@ -30,7 +31,7 @@ export function randomString(length, withnumbers = true) {
 
   @return {Number} generated random number
   */
-export function randomNumber(max) {
+export function randomNumber(max: number): number {
   return Math.floor(Math.random() * (max + 1))
 }
 
@@ -43,10 +44,9 @@ export function randomNumber(max) {
 
   @return {Object} Object with the diffed values
   */
-export function diffKeys(objA, objB) {
-  var diff, key
-  diff = {}
-  for (key in objA) {
+export function diffKeys(objA: object, objB: object): any {
+  let diff = {}
+  for (const key in objA) {
     if (objB.hasOwnProperty(key)) {
       diff[key] = objA[key] - objB[key]
     }

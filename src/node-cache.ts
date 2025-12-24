@@ -66,7 +66,7 @@ export default class NodeCache<T> extends EventEmitter {
   validKeyTypes = ['string', 'number']
 
   // timeout object for checkperiod
-  checkTimeout: NodeJS.Timeout | null = null
+  #timeout: NodeJS.Timeout | null = null
 
   constructor(options: Partial<Options> = {}) {
     super()
@@ -402,7 +402,7 @@ export default class NodeCache<T> extends EventEmitter {
       vsize: 0,
     }
     // reset check period
-    this._killCheckPeriod()
+    this.#killCheckPeriod()
     this._checkData(_startPeriod)
     this.emit('flush')
   }
@@ -432,7 +432,7 @@ export default class NodeCache<T> extends EventEmitter {
 
   // This will clear the interval timeout which is set on checkperiod option.
   close() {
-    this._killCheckPeriod()
+    this.#killCheckPeriod()
   }
 
   // internal housekeeping method.
@@ -442,20 +442,20 @@ export default class NodeCache<T> extends EventEmitter {
       this._check(key, value)
     }
     if (startPeriod && this.options.checkperiod > 0) {
-      this.checkTimeout = setTimeout(
+      this.#timeout = setTimeout(
         this._checkData,
         this.options.checkperiod * 1000,
         startPeriod,
       )
-      this.checkTimeout.unref()
+      this.#timeout.unref()
     }
   }
 
   // stop the checkdata period. Only needed to abort the script in testing mode.
-  _killCheckPeriod(): void {
-    if (this.checkTimeout !== null) {
-      this.checkTimeout = null
-      return clearTimeout(this.checkTimeout)
+  #killCheckPeriod(): void {
+    if (this.#timeout !== null) {
+      clearTimeout(this.#timeout)
+      this.#timeout = null
     }
   }
 

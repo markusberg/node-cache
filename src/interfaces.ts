@@ -52,15 +52,6 @@ export interface Options {
   deleteOnExpire?: boolean
 
   /**
-   * enable legacy callbacks.
-   * legacy callback support will drop in v6.x!
-   *
-   * @type {boolean}
-   * @memberof Options
-   */
-  enableLegacyCallbacks?: boolean
-
-  /**
    * max amount of keys that are being stored.
    * set operations will throw an error when the cache is full
    *

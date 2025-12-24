@@ -53,3 +53,7 @@ export function diffKeys(objA: object, objB: object): any {
   }
   return diff
 }
+
+export function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(() => resolve(), ms))
+}

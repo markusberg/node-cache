@@ -44,8 +44,6 @@ export default class NodeCache<T> extends EventEmitter {
     useClones: true,
     // whether values should be deleted automatically at expiration
     deleteOnExpire: true,
-    // enable legacy callbacks
-    enableLegacyCallbacks: false,
     // max amount of keys that are being stored
     maxKeys: -1,
   }

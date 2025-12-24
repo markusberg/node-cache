@@ -1,10 +1,10 @@
 ![Logo](./logo/logo.png)
 
-[![Node.js CI](https://github.com/markusberg/node-cache/workflows/Node.js%20CI/badge.svg?branch=master)](https://github.com/markusberg/node-cache/actions?query=workflow%3A%22Node.js+CI%22+branch%3A%22master%22)
-![Dependency status](https://img.shields.io/david/markusberg/node-cache)
-[![NPM package version](https://img.shields.io/npm/v/@markusberg/node-cache?label=npm%20package)](https://www.npmjs.com/package/@markusberg/node-cache)
-[![NPM monthly downloads](https://img.shields.io/npm/dm/@markusberg/node-cache)](https://www.npmjs.com/package/markusberg/node-cache)
-[![GitHub issues](https://img.shields.io/github/issues/markusberg/node-cache)](https://github.com/markusberg/node-cache/issues)
+[![node.js build](https://github.com/markusberg/node-cache/actions/workflows/badges.yaml/badge.svg)](https://github.com/markusberg/node-cache/actions/workflows/badges.yaml)
+[![coverage](https://markusberg.github.io/node-cache/badges/coverage-6.0.0.svg)](https://github.com/markusberg/node-cache/actions)
+![version](https://img.shields.io/npm/v/@markusberg/node-cache.svg)
+[![license](https://img.shields.io/github/license/markusberg/node-cache.svg)](./LICENSE)
+[![downloads](https://img.shields.io/npm/dt/@markusberg/node-cache.svg)](http://npm-stat.com/charts.html?package=@markusberg/node-cache)
 
 # Simple and fast NodeJS internal caching.
 
@@ -12,157 +12,136 @@ A simple caching module that has `set`, `get` and `delete` methods and works a l
 Keys can have a timeout (`ttl`) after which they expire and are deleted from the cache.
 All keys are stored in a single object so the practical limit is at around 1m keys.
 
-## Declaration to not sell out
+## Fork information
 
-We have received numerous requests in the past to hand over this project to a new maintainer so that it could be revived and brought back to life.
-Many of these request also offered money to essentially "buy" the project (or its reputation and its user-base).
+This package is a fork of the original [node-cache](https://www.npmjs.com/package/node-cache) package
+that's currently unmaintained. It is a TypeScript migration of both the node-cache library and its tests.
+The migration of this package is the reason for my previous migration of the
+[clone](https://www.npmjs.com/package/@markusberg/clone) library, because that package is the only hard
+dependency that node-cache has.
 
-These requests are highly risky for the current users of this project, especially in times of the xz-backdoor and the thought of handing over the trust of the userbase (which was almost single-handedly built up by [@mpneuried](https://github.com/mpneuried) and sponsored by [Team Centric Software](https://www.tcs.de/)) feels like we would berate you.
-Handing the keys to this project (especially the permission to publish new versions of the package on npm), over to someone new includes handing over the trust our userbase puts into the package.
+To help minimize version confusion, the first version of this package is 6.0.0 which was supposed to
+be the next version of node-cache.
 
-Therefore **we vow not to sell this project, and it's 2,886,264 weekly downloads (according to npm as of May 29th 2024)**.
-
-Yes, this project is apparently unmaintained. If you want to pick up the slack, feel free to create a fork and start maintaining over there. If the community wants it will follow.
-
-
-## BREAKING MAJOR RELEASE v5.x
-
-The recent 5.x release:
-* dropped support for node versions before 8.x!
-* removed the callback-based api from all methods (you can re-enable them with the option `enableLegacyCallbacks`)
-
-## BREAKING MAJOR RELEASE v6.x UPCOMING
-
-Although not breaking per definition, our typescript rewrite will change internal functions and their names.
-Please get in contact with us, if you are using some parts of node-cache's internal api so we can work something out!
-
+The aim is to have v6.0.0 be compatible with node-cache v5.1.2 minus deprecations. Also, v6.0.0
+is [ESModule only](https://gist.github.com/sindresorhus/a39789f98801d908bbc7ff3ecc99d99c), and drops support for Node.Js versions below 20.
 
 # Install
 
 ```bash
-	npm install node-cache --save
+npm install @markusberg/node-cache
 ```
-
-Or just require the `node_cache.js` file to get the superclass
 
 # Examples:
 
 ## Initialize (INIT):
 
-```js
-const NodeCache = require( "node-cache" );
-const myCache = new NodeCache();
+```TypeScript
+import NodeCache from '@markusberg/node-cache'
+const myCache = new NodeCache<T>()
 ```
 
 ### Options
 
-- `stdTTL`: *(default: `0`)* the standard ttl as number in seconds for every generated cache element.
-`0` = unlimited
-- `checkperiod`: *(default: `600`)* The period in seconds, as a number, used for the automatic delete check interval.
-`0` = no periodic check.
-- `useClones`: *(default: `true`)* en/disable cloning of variables. If `true` you'll get a copy of the cached variable. If `false` you'll save and get just the reference.  
-**Note:**
-	- `true` is recommended if you want **simplicity**, because it'll behave like a server-based cache (it caches copies of plain data).
-	- `false` is recommended if you want to achieve **performance** or save mutable objects or other complex types with mutability involved and wanted, because it'll only store references of your data.
-	- _Here's a [simple code example](https://runkit.com/mpneuried/useclones-example-83) showing the different behavior_
-- `deleteOnExpire`: *(default: `true`)* whether variables will be deleted automatically when they expire.
-If `true` the variable will be deleted. If `false` the variable will remain. You are encouraged to handle the variable upon the event `expired` by yourself.
-- `enableLegacyCallbacks`: *(default: `false`)* re-enables the usage of callbacks instead of sync functions. Adds an additional `cb` argument to each function which resolves to `(err, result)`. will be removed in node-cache v6.x.
-- `maxKeys`: *(default: `-1`)* specifies a maximum amount of keys that can be stored in the cache. If a new item is set and the cache is full, an error is thrown and the key will not be saved in the cache. -1 disables the key limit.
+- `stdTTL`: _(default: `0`)_ the standard ttl as number in seconds for every generated cache element.
+  `0` = unlimited
+- `checkperiod`: _(default: `600`)_ The period in seconds, as a number, used for the automatic delete check interval.
+  `0` = no periodic check.
+- `useClones`: _(default: `true`)_ en/disable cloning of variables. If `true` you'll get a copy of the cached variable. If `false` you'll save and get just the reference.  
+  **Note:** - `true` is recommended if you want **simplicity**, because it'll behave like a server-based cache (it caches copies of plain data). - `false` is recommended if you want to achieve **performance** or save mutable objects or other complex types with mutability involved and wanted, because it'll only store references of your data. - _Here's a [simple code example](https://runkit.com/mpneuried/useclones-example-83) showing the different behavior_
+- `deleteOnExpire`: _(default: `true`)_ whether variables will be deleted automatically when they expire.
+  If `true` the variable will be deleted. If `false` the variable will remain. You are encouraged to handle the variable upon the event `expired` by yourself.
+- `enableLegacyCallbacks`: _(default: `false`)_ re-enables the usage of callbacks instead of sync functions. Adds an additional `cb` argument to each function which resolves to `(err, result)`. will be removed in node-cache v6.x.
+- `maxKeys`: _(default: `-1`)_ specifies a maximum amount of keys that can be stored in the cache. If a new item is set and the cache is full, an error is thrown and the key will not be saved in the cache. -1 disables the key limit.
 
-```js
-const NodeCache = require( "node-cache" );
-const myCache = new NodeCache( { stdTTL: 100, checkperiod: 120 } );
+```TypeScript
+import NodeCache from '@markusberg/node-cache'
+const myCache = new NodeCache({ stdTTL: 100, checkperiod: 120 })
 ```
 
 **Since `4.1.0`**:
-*Key-validation*: The keys can be given as either `string` or `number`, but are casted to a `string` internally anyway.
+_Key-validation_: The keys can be given as either `string` or `number`, but are casted to a `string` internally anyway.
 All other types will throw an error.
 
 ## Store a key (SET):
 
-`myCache.set( key, val, [ ttl ] )`
+`myCache.set(key, val, [ ttl ])`
 
 Sets a `key` `value` pair. It is possible to define a `ttl` (in seconds).
 Returns `true` on success.
 
-```js
-obj = { my: "Special", variable: 42 };
-
-success = myCache.set( "myKey", obj, 10000 );
+```TypeScript
+const obj = { my: 'Special', variable: 42 }
+const success = myCache.set('myKey', obj, 10000)
 // true
 ```
 
-> Note: If the key expires based on it's `ttl` it will be deleted entirely from the internal data object.
-
+> Note: If the key expires based on its `ttl` it will be deleted entirely from the internal data object.
 
 ## Store multiple keys (MSET):
 
-`myCache.mset(Array<{key, val, ttl?}>)`
+`myCache.mset({key: Key, value: T, ttl?: number}[])`
 
 Sets multiple `key` `val` pairs. It is possible to define a `ttl` (seconds).
 Returns `true` on success.
 
-```js
-const obj = { my: "Special", variable: 42 };
-const obj2 = { my: "other special", variable: 1337 };
+```TypeScript
+const obj = { my: 'Special', variable: 42 }
+const obj2 = { my: 'other special', variable: 1337 }
 
 const success = myCache.mset([
-	{key: "myKey", val: obj, ttl: 10000},
-	{key: "myKey2", val: obj2},
+  { key: 'myKey', val: obj, ttl: 10000 },
+  { key: 'myKey2', val: obj2 },
 ])
 ```
 
 ## Retrieve a key (GET):
 
-`myCache.get( key )`
+`myCache.get(key)`
 
-Gets a saved value from the cache.
-Returns a `undefined` if not found or expired.
+Gets a saved value from the cache. Returns a `undefined` if not found or expired.
 If the value was found it returns the `value`.
 
-```js
-value = myCache.get( "myKey" );
-if ( value == undefined ){
-	// handle miss!
+```TypeScript
+const value = myCache.get('myKey')
+if (value === undefined) {
+  // handle miss!
 }
 // { my: "Special", variable: 42 }
 ```
 
 **Since `2.0.0`**:
 
-The return format changed to a simple value and a `ENOTFOUND` error if not found *( as result instance of `Error` )
+The return format changed to a simple value and a `ENOTFOUND` error if not found (as result instance of `Error`)
 
 **Since `2.1.0`**:
 
-The return format changed to a simple value, but a due to discussion in #11 a miss shouldn't return an error.
-So after 2.1.0 a miss returns `undefined`.
+The return format changed to a simple value, but a due to discussion in #11 a miss shouldn't
+return an error. So after 2.1.0 a miss returns `undefined`.
 
 ## Take a key (TAKE):
 
-`myCache.take( key )`
+`myCache.take(key)`
 
-get the cached value and remove the key from the cache.  
-Equivalent to calling `get(key)` + `del(key)`.  
+Get the cached value and remove the key from the cache. Equivalent to calling `get(key)` + `del(key)`.
 Useful for implementing `single use` mechanism such as OTP, where once a value is read it will become obsolete.
 
-```js
-myCache.set( "myKey", "myValue" )
-myCache.has( "myKey" ) // returns true because the key is cached right now
-value = myCache.take( "myKey" ) // value === "myValue"; this also deletes the key
-myCache.has( "myKey" ) // returns false because the key has been deleted
+```TypeScript
+myCache.set('myKey', 'myValue')
+myCache.has('myKey')                // returns true because the key is cached right now
+const value = myCache.take('myKey') // value === "myValue"; this also deletes the key
+myCache.has('myKey')                // returns false because the key has been deleted
 ```
 
 ## Get multiple keys (MGET):
 
-`myCache.mget( [ key1, key2, ..., keyn ] )`
+`myCache.mget([ key1, key2, ..., keyn ])`
 
-Gets multiple saved values from the cache.
-Returns an empty object `{}` if not found or expired.
-If the value was found it returns an object with the `key` `value` pair.
+Gets multiple saved values from the cache. Returns an empty object `{}` if no keys are found or are
+expired. If the value was found it returns an object with the `key` `value` pair.
 
-```js
-value = myCache.mget( [ "myKeyA", "myKeyB" ] );
+```TypeScript
+const value = myCache.mget(['myKeyA', 'myKeyB', 'nonExistentKey', 'expiredKey'])
 /*
 	{
 		"myKeyA": { my: "Special", variable: 123 },
@@ -173,85 +152,85 @@ value = myCache.mget( [ "myKeyA", "myKeyB" ] );
 
 **Since `2.0.0`**:
 
-The method for mget changed from `.get( [ "a", "b" ] )` to `.mget( [ "a", "b" ] )`
+The method for mget changed from `.get([ "a", "b" ])` to `.mget([ "a", "b" ])`
 
 ## Delete a key (DEL):
 
-`myCache.del( key )`
+`myCache.del(key)`
 
 Delete a key. Returns the number of deleted entries. A delete will never fail.
 
-```js
-value = myCache.del( "A" );
+```TypeScript
+const value = myCache.del('A')
 // 1
 ```
 
 ## Delete multiple keys (MDEL):
 
-`myCache.del( [ key1, key2, ..., keyn ] )`
+`myCache.del([ key1, key2, ..., keyn ])`
 
 Delete multiple keys. Returns the number of deleted entries. A delete will never fail.
 
-```js
-value = myCache.del( "A" );
+```TypeScript
+const delResult1 = myCache.del('A')
 // 1
 
-value = myCache.del( [ "B", "C" ] );
+const delResult2 = myCache.del(['B', 'C'])
 // 2
 
-value = myCache.del( [ "A", "B", "C", "D" ] );
+const delResult3 = myCache.del(['A', 'B', 'C', 'D'])
 // 1 - because A, B and C not exists
 ```
 
 ## Change TTL (TTL):
 
-`myCache.ttl( key, ttl )`
+`myCache.ttl(key, ttl)`
 
 Redefine the ttl of a key. Returns true if the key has been found and changed. Otherwise returns false.
 If the ttl-argument isn't passed the default-TTL will be used.
 
 The key will be deleted when passing in a `ttl < 0`.
 
-```js
-myCache = new NodeCache( { stdTTL: 100 } )
-changed = myCache.ttl( "existentKey", 100 )
+```TypeScript
+const myCache = new NodeCache<unknown>({ stdTTL: 100 })
+const changed = myCache.ttl('existingKey', 100)
 // true
 
-changed2 = myCache.ttl( "missingKey", 100 )
+const changed2 = myCache.ttl('missingKey', 100)
 // false
 
-changed3 = myCache.ttl( "existentKey" )
+const changed3 = myCache.ttl('existingKey')
 // true
 ```
 
 ## Get TTL (getTTL):
 
-`myCache.getTtl( key )`
+`myCache.getTtl(key)`
 
-Receive the ttl of a key.
-You will get:
+Receive the ttl of a key. You will get:
+
 - `undefined` if the key does not exist
 - `0` if this key has no ttl
 - a timestamp in ms representing the time at which the key will expire
 
-```js
-myCache = new NodeCache( { stdTTL: 100 } )
+```TypeScript
+const myCache = new NodeCache<string>({ stdTTL: 100 })
 
 // Date.now() = 1456000500000
-myCache.set( "ttlKey", "MyExpireData" )
-myCache.set( "noTtlKey", "NonExpireData", 0 )
+myCache.set('ttlKey', 'MyExpireData')
+myCache.set('noTtlKey', 'NonExpireData', 0)
 
-ts = myCache.getTtl( "ttlKey" )
-// ts wil be approximately 1456000600000
+const ts1 = myCache.getTtl('ttlKey')
+// ts1 will be approximately 1456000600000
 
-ts = myCache.getTtl( "ttlKey" )
-// ts wil be approximately 1456000600000
+const ts2 = myCache.getTtl('ttlKey')
+// ts2 wil be approximately 1456000600000
 
-ts = myCache.getTtl( "noTtlKey" )
-// ts = 0
+const ts3 = myCache.getTtl('noTtlKey')
+// ts3 = 0
 
-ts = myCache.getTtl( "unknownKey" )
-// ts = undefined
+const ts4 = myCache.getTtl('unknownKey')
+// ts4 = undefined
 ```
 
 ## List keys (KEYS)
@@ -260,23 +239,24 @@ ts = myCache.getTtl( "unknownKey" )
 
 Returns an array of all existing keys.
 
-```js
-mykeys = myCache.keys();
+```TypeScript
+const mykeys = myCache.keys()
 
-console.log( mykeys );
+console.log(mykeys)
 // [ "all", "my", "keys", "foo", "bar" ]
 ```
 
 ## Has key (HAS)
 
-`myCache.has( key )`
+`myCache.has(key)`
 
 Returns boolean indicating if the key is cached.
 
-```js
-exists = myCache.has( 'myKey' );
-
-console.log( exists );
+```TypeScript
+const myCache = new NodeCache<string>()
+myCache.set('myKey', 'myValue')
+const exists = myCache.has('myKey')
+console.log(exists)
 ```
 
 ## Statistics (STATS):
@@ -285,9 +265,9 @@ console.log( exists );
 
 Returns the statistics.
 
-```js
-myCache.getStats();
-	/*
+```TypeScript
+myCache.getStats()
+/*
 		{
 			keys: 0,    // global key count
 			hits: 0,    // global hit count
@@ -304,10 +284,10 @@ myCache.getStats();
 
 Flush all data.
 
-```js
-myCache.flushAll();
-myCache.getStats();
-	/*
+```TypeScript
+myCache.flushAll()
+myCache.getStats()
+/*
 		{
 			keys: 0,    // global key count
 			hits: 0,    // global hit count
@@ -324,10 +304,10 @@ myCache.getStats();
 
 Flush the stats.
 
-```js
-myCache.flushStats();
-myCache.getStats();
-	/*
+```TypeScript
+myCache.flushStats()
+myCache.getStats()
+/*
 		{
 			keys: 0,    // global key count
 			hits: 0,    // global hit count
@@ -342,23 +322,22 @@ myCache.getStats();
 
 `myCache.close()`
 
-This will clear the interval timeout which is set on check period option.
+Clear the timeout interval which is set on check period option.
 
-```js
-myCache.close();
+```TypeScript
+myCache.close()
 ```
 
 # Events
 
 ## set
 
-Fired when a key has been added or changed.
-You will get the `key` and the `value` as callback argument.
+Fired when a key has been added or changed. You will get the `key` and the `value` as callback argument.
 
-```js
-myCache.on( "set", function( key, value ){
-	// ... do something ...
-});
+```TypeScript
+myCache.on('set', (key: Key, value: T) => {
+  // ... do something ...
+})
 ```
 
 ## del
@@ -366,10 +345,10 @@ myCache.on( "set", function( key, value ){
 Fired when a key has been removed manually or due to expiry.
 You will get the `key` and the deleted `value` as callback arguments.
 
-```js
-myCache.on( "del", function( key, value ){
-	// ... do something ...
-});
+```TypeScript
+myCache.on('del', (key: Key, value: T) => {
+  // ... do something ...
+})
 ```
 
 ## expired
@@ -377,113 +356,31 @@ myCache.on( "del", function( key, value ){
 Fired when a key expires.
 You will get the `key` and `value` as callback argument.
 
-```js
-myCache.on( "expired", function( key, value ){
-	// ... do something ...
-});
+```TypeScript
+myCache.on('expired', (key: Key, value: T) => {
+  // ... do something ...
+})
 ```
 
 ## flush
 
 Fired when the cache has been flushed.
 
-```js
-myCache.on( "flush", function(){
-	// ... do something ...
-});
+```TypeScript
+myCache.on('flush', () => {
+  // ... do something ...
+})
 ```
 
 ## flush_stats
 
 Fired when the cache stats has been flushed.
 
-```js
-myCache.on( "flush_stats", function(){
-	// ... do something ...
-});
+```TypeScript
+myCache.on('flush_stats', () => {
+  // ... do something ...
+})
 ```
-
-
-## Breaking changes
-
-### version `2.x`
-
-Due to the [Issue #11](https://github.com/mpneuried/nodecache/issues/11) the return format of the `.get()` method has been changed!
-
-Instead of returning an object with the key `{ "myKey": "myValue" }` it returns the value itself `"myValue"`.
-
-### version `3.x`
-
-Due to the [Issue #30](https://github.com/mpneuried/nodecache/issues/30) and [Issue #27](https://github.com/mpneuried/nodecache/issues/27) variables will now be cloned.
-This could break your code, because for some variable types ( e.g. Promise ) its not possible to clone them.
-You can disable the cloning by setting the option `useClones: false`. In this case it's compatible with version `2.x`.
-
-### version `5.x`
-
-Callbacks are deprecated in this version. They are still useable when enabling the `enableLegacyCallbacks` option when initializing the cache. Callbacks will be completely removed in `6.x`.
-
-## Compatibility
-
-Node-Cache supports all node versions >= 8
-
-## Release History
-|Version|Date|Description|
-|:--:|:--:|:--|
-|5.1.2|2020-07-01|[#195] type definition for `.take()` and typo fixes, thx [shhadi](https://github.com/shhadi)!, [#198]/[#197] error when setting a value in a js environment without `Buffer` in global scope, thanks [jdussouillez](https://github.com/jdussouillez) and [Sirz3chs](https://github.com/Sirz3chs) for your help|
-|5.1.1|2020-06-06|[#184], [#183] thanks [Jonah Werre](https://github.com/jwerre) for reporting [#181]!, [#180], Thanks [Titus](https://github.com/tstone) for [#169]!, Thanks [Ianfeather](https://github.com/Ianfeather) for [#168]!, Thanks [Adam Haglund](https://github.com/BeeeQueue) for [#176]|
-|5.1.0|2019-12-08|Add .take() from PR [#160] and .flushStats from PR [#161]. Thanks to [Sujesh Thekkepatt](https://github.com/sujeshthekkepatt) and [Gopalakrishna Palem](https://github.com/KrishnaPG)!|
-|5.0.2|2019-11-17|Fixed bug where expired values were deleted even though `deleteOnExpire` was set to `false`. Thanks to [fielding-wilson](https://github.com/fielding-wilson)!|
-|5.0.1|2019-10-31|Fixed bug where users could not set null values. Thanks to [StefanoSega](https://github.com/StefanoSega), [jwest23](https://github.com/jwest23) and [marudor](https://github.com/marudor)!|
-|5.0.0|2019-10-23|Remove lodash dependency, add .has(key) and .mset([{key,val,ttl}]) methods to the cache. Thanks to [Regev Brody](https://github.com/regevbr) for PR [#132] and [Sujesh Thekkepatt](https://github.com/sujeshthekkepatt) for PR [#142]! Also thank you, to all other contributors that remain unnamed here!|
-|4.2.1|2019-07-22|Upgrade lodash to version 4.17.15 to suppress messages about unrelated security vulnerability|
-|4.2.0|2018-02-01|Add options.promiseValueSize for promise value. Thanks to [Ryan Roemer](https://github.com/ryan-roemer) for the pull [#84]; Added option `deleteOnExpire`; Added DefinitelyTyped Typescript definitions. Thanks to [Ulf Seltmann](https://github.com/useltmann) for the pulls [#90] and [#92]; Thanks to [Daniel Jin](https://github.com/danieljin) for the readme fix in pull [#93];  Optimized test and ci configs.|
-|4.1.1|2016-12-21|fix internal check interval for node < 0.10.25, thats the default node for ubuntu 14.04. Thanks to [Jimmy Hwang](https://github.com/JimmyHwang) for the pull [#78](https://github.com/mpneuried/nodecache/pull/78); added more docker tests|
-|4.1.0|2016-09-23|Added tests for different key types; Added key validation (must be `string` or `number`); Fixed `.del` bug where trying to delete a `number` key resulted in no deletion at all.|
-|4.0.0|2016-09-20|Updated tests to mocha; Fixed `.ttl` bug to not delete key on `.ttl( key, 0 )`. This is also relevant if `stdTTL=0`. *This causes the breaking change to `4.0.0`.*|
-|3.2.1|2016-03-21|Updated lodash to 4.x.; optimized grunt |
-|3.2.0|2016-01-29|Added method `getTtl` to get the time when a key expires. See [#49](https://github.com/mpneuried/nodecache/issues/49)|
-|3.1.0|2016-01-29|Added option `errorOnMissing` to throw/callback an error o a miss during a `.get( "key" )`. Thanks to [David Godfrey](https://github.com/david-byng) for the pull [#45](https://github.com/mpneuried/nodecache/pull/45). Added docker files and a script to run test on different node versions locally|
-|3.0.1|2016-01-13|Added `.unref()` to the checkTimeout so until node `0.10` it's not necessary to call `.close()` when your script is done. Thanks to [Doug Moscrop](https://github.com/dougmoscrop) for the pull [#44](https://github.com/mpneuried/nodecache/pull/44).|
-|3.0.0|2015-05-29|Return a cloned version of the cached element and save a cloned version of a variable. This can be disabled by setting the option `useClones:false`. (Thanks for #27 to [cheshirecatalyst](https://github.com/cheshirecatalyst) and for #30 to [Matthieu Sieben](https://github.com/matthieusieben))|
-|~~2.2.0~~|~~2015-05-27~~|REVOKED VERSION, because of conficts. See [Issue #30](https://github.com/mpneuried/nodecache/issues/30). So `2.2.0` is now `3.0.0`|
-|2.1.1|2015-04-17|Passed old value to the `del` event. Thanks to [Qix](https://github.com/qix) for the pull.|
-|2.1.0|2015-04-17|Changed get miss to return `undefined` instead of an error. Thanks to all [#11](https://github.com/mpneuried/nodecache/issues/11) contributors |
-|2.0.1|2015-04-17|Added close function (Thanks to [ownagedj](https://github.com/ownagedj)). Changed the development environment to use grunt.|
-|2.0.0|2015-01-05|changed return format of `.get()` with a error return on a miss and added the `.mget()` method. *Side effect: Performance of .get() up to 330 times faster!*|
-|1.1.0|2015-01-05|added `.keys()` method to list all existing keys|
-|1.0.3|2014-11-07|fix for setting numeric values. Thanks to [kaspars](https://github.com/kaspars) + optimized key ckeck.|
-|1.0.2|2014-09-17|Small change for better ttl handling|
-|1.0.1|2014-05-22|Readme typos. Thanks to [mjschranz](https://github.com/mjschranz)|
-|1.0.0|2014-04-09|Made `callback`s optional. So it's now possible to use a syncron syntax. The old syntax should also work well. Push : Bugfix for the value `0`|
-|0.4.1|2013-10-02|Added the value to `expired` event|
-|0.4.0|2013-10-02|Added nodecache events|
-|0.3.2|2012-05-31|Added Travis tests|
-
-[![NPM](https://nodei.co/npm-dl/node-cache.png?months=6)](https://nodei.co/npm/node-cache/)
-
-## Other projects
-
-|Name|Description|
-|:--|:--|
-|[**rsmq**](https://github.com/smrchy/rsmq)|A really simple message queue based on redis|
-|[**redis-heartbeat**](https://github.com/mpneuried/redis-heartbeat)|Pulse a heartbeat to redis. This can be used to detach or attach servers to nginx or similar problems.|
-|[**systemhealth**](https://github.com/mpneuried/systemhealth)|Node module to run simple custom checks for your machine or it's connections. It will use [redis-heartbeat](https://github.com/mpneuried/redis-heartbeat) to send the current state to redis.|
-|[**rsmq-cli**](https://github.com/mpneuried/rsmq-cli)|a terminal client for rsmq|
-|[**rest-rsmq**](https://github.com/smrchy/rest-rsmq)|REST interface for.|
-|[**redis-sessions**](https://github.com/smrchy/redis-sessions)|An advanced session store for NodeJS and Redis|
-|[**connect-redis-sessions**](https://github.com/mpneuried/connect-redis-sessions)|A connect or express middleware to simply use the [redis sessions](https://github.com/smrchy/redis-sessions). With [redis sessions](https://github.com/smrchy/redis-sessions) you can handle multiple sessions per user_id.|
-|[**redis-notifications**](https://github.com/mpneuried/redis-notifications)|A redis based notification engine. It implements the rsmq-worker to safely create notifications and recurring reports.|
-|[**nsq-logger**](https://github.com/mpneuried/nsq-logger)|Nsq service to read messages from all topics listed within a list of nsqlookupd services.|
-|[**nsq-topics**](https://github.com/mpneuried/nsq-topics)|Nsq helper to poll a nsqlookupd service for all it's topics and mirror it locally.|
-|[**nsq-nodes**](https://github.com/mpneuried/nsq-nodes)|Nsq helper to poll a nsqlookupd service for all it's nodes and mirror it locally.|
-|[**nsq-watch**](https://github.com/mpneuried/nsq-watch)|Watch one or many topics for unprocessed messages.|
-|[**hyperrequest**](https://github.com/mpneuried/hyperrequest)|A wrapper around [hyperquest](https://github.com/substack/hyperquest) to handle the results|
-|[**task-queue-worker**](https://github.com/smrchy/task-queue-worker)|A powerful tool for background processing of tasks that are run by making standard http requests
-|[**soyer**](https://github.com/mpneuried/soyer)|Soyer is small lib for server side use of Google Closure Templates with node.js.|
-|[**grunt-soy-compile**](https://github.com/mpneuried/grunt-soy-compile)|Compile Goggle Closure Templates ( SOY ) templates including the handling of XLIFF language files.|
-|[**backlunr**](https://github.com/mpneuried/backlunr)|A solution to bring Backbone Collections together with the browser fulltext search engine Lunr.js|
-|[**domel**](https://github.com/mpneuried/domel)|A simple dom helper if you want to get rid of jQuery|
-|[**obj-schema**](https://github.com/mpneuried/obj-schema)|Simple module to validate an object by a predefined schema|
 
 # The MIT License (MIT)
 

@@ -19,6 +19,8 @@ import type {
   WrappedValue,
 } from './interfaces.js'
 
+export * from './interfaces.js'
+
 export default class NodeCache<T> extends EventEmitter {
   ERRORS: Record<ERROR_CODE, (key: string) => string> = {
     ENOTFOUND: (key: string) => `Key \`${key}\` not found`,
@@ -86,30 +88,34 @@ export default class NodeCache<T> extends EventEmitter {
     return
   }
 
-  // get a cached key and change the stats
-  // **Parameters:**
-  // * `key` ( String | Number ): cache key
-  // **Example:**
-  //	myCache.get "myKey", ( err, val )
+  /**
+   * Get a cached key and update statistics.
+   * @param key - The cache key (string or number)
+   * @returns The cached value or undefined if not found
+   * @example
+   * const value = myCache.get('myKey')
+   */
   get(key: Key): T | undefined {
     this.#checkKeyValidity(key)
 
     // get data and increment stats
     const value = this.data[key]
-    if (!!value && this._check(key, value)) {
+    if (!!value && this.#check(key, value)) {
       this.stats.hits++
-      return this._unwrap(value)
+      return this.#unwrap(value)
     }
     // if not found return undefined
     this.stats.misses++
     return undefined
   }
 
-  // get multiple cached keys at once and change the stats
-  // **Parameters:**
-  // * `keys` ( String|Number[] ): an array of keys
-  // **Example:**
-  //	myCache.mget [ "foo", "bar" ]
+  /**
+   * Get multiple cached keys at once and update statistics.
+   * @param keys - An array of cache keys
+   * @returns An object with key-value pairs for found keys
+   * @example
+   * const values = myCache.mget(['foo', 'bar'])
+   */
   mget(keys: Key[]): Record<Key, T> {
     // convert a string to an array of one key
     if (!Array.isArray(keys)) {
@@ -121,9 +127,9 @@ export default class NodeCache<T> extends EventEmitter {
       this.#checkKeyValidity(key)
       // get data and increment stats
       const value = this.data[key]
-      if (!!value && this._check(key, value)) {
+      if (!!value && this.#check(key, value)) {
         this.stats.hits++
-        oRet[key] = this._unwrap(value)
+        oRet[key] = this.#unwrap(value)
       } else {
         // if not found return a error
         this.stats.misses++
@@ -133,14 +139,16 @@ export default class NodeCache<T> extends EventEmitter {
     return oRet
   }
 
-  // set a cached key and change the stats
-  // **Parameters:**
-  // * `key` ( String | Number ): cache key
-  // * `value` ( Any ): An element to cache. If the option `option.forceString` is `true` the module trys to translate it to a serialized JSON
-  // * `[ ttl ]` ( Number | String ): ( optional ) The time to live in seconds.
-  // **Example:**
-  //	myCache.set "myKey", "my_String Value"
-  //	myCache.set "myKey", "my_String Value", 10
+  /**
+   * Set a cached key and update statistics.
+   * @param key - The cache key (string or number)
+   * @param value - The value to cache. If forceString option is true, it will be JSON serialized
+   * @param ttl - Optional time to live in seconds (0 = infinite)
+   * @returns true if the value was set successfully
+   * @example
+   * myCache.set('myKey', 'myValue')
+   * myCache.set('myKey', 'myValue', 10) // expires in 10 seconds
+   */
   set(key: Key, value: T, ttl?: number): boolean {
     // check if cache is overflowing
     if (
@@ -160,33 +168,36 @@ export default class NodeCache<T> extends EventEmitter {
     if (alreadyExists) {
       // remove existing data from stats
       alreadyExists = true
-      this.stats.vsize -= this._getValLength(
-        this._unwrap(this.data[key], false),
+      this.stats.vsize -= this.#getValLength(
+        this.#unwrap(this.data[key], false),
       )
     }
     // set default ttl if not passed
     const realTtl = ttl === undefined ? this.#options.stdTTL : ttl
 
     // set the value
-    this.data[key] = this._wrap(value, realTtl)
-    this.stats.vsize += this._getValLength(value)
+    this.data[key] = this.#wrap(value, realTtl)
+    this.stats.vsize += this.#getValLength(value)
     // only add the keys and key-size if the key is new
     if (!alreadyExists) {
-      this.stats.ksize += this._getKeyLength(key)
+      this.stats.ksize += this.#getKeyLength(key)
       this.stats.keys++
     }
     this.emit('set', key, value)
     return true
   }
 
-  // in the event of a cache miss (no value is assinged to given cache key), value will be written to cache and returned. In case of cache hit, cached value will be returned without executing given value. If the given value is type of `Function`, it will be executed and returned result will be fetched
-  // **Parameters:**
-  // * `key` ( String | Number ): cache key
-  // * `[ ttl ]` ( Number | String ): ( optional ) The time to live in seconds.
-  // * `value` ( Any ): if `Function` type is given, it will be executed and returned value will be fetched, otherwise the value itself is fetched
-  // **Example:**
-  // myCache.fetch "myKey", 10, () => "my_String value"
-  // myCache.fetch "myKey", "my_String value"
+  /**
+   * Fetch a value from cache, or set and return a new value if not found.
+   * If a Function is provided, it will be executed and its result cached.
+   * @param key - The cache key
+   * @param ttl - Time to live in seconds, or the value if value param is omitted
+   * @param value - The value to cache (can be a function that returns the value)
+   * @returns The cached or computed value
+   * @example
+   * myCache.fetch('myKey', 10, () => expensiveComputation())
+   * myCache.fetch('myKey', 'staticValue')
+   */
   fetch(key: Key, ttl: any, value: T | undefined) {
     // check if cache is hit
     if (this.has(key)) {
@@ -201,18 +212,16 @@ export default class NodeCache<T> extends EventEmitter {
     return _ret
   }
 
-  // set multiple keys at once
-  // **Parameters:**
-  // * `keyValueSet` ( Object[] ): an array of objects which include key, value, and ttl
-  // **Example:**
-  //	myCache.mset(
-  //		[
-  //			{
-  //				key: "myKey",
-  //				val: "myValue",
-  //				ttl: [ttl in seconds]
-  //			}
-  //		])
+  /**
+   * Set multiple key-value pairs at once.
+   * @param keyValueSet - An array of objects with key, val, and optional ttl properties
+   * @returns true if all values were set successfully
+   * @example
+   * myCache.mset([
+   *   { key: 'key1', val: 'value1', ttl: 10 },
+   *   { key: 'key2', val: 'value2' }
+   * ])
+   */
   mset(keyValueSet: ValueSetItem<T>[]): boolean {
     // check if cache is overflowing
     if (
@@ -238,13 +247,14 @@ export default class NodeCache<T> extends EventEmitter {
     return true
   }
 
-  // remove keys
-  // **Parameters:**
-  // * `keys` ( String | Number | String|Number[] ): cache key to delete or an array of cache keys
-  // **Return**
-  // ( Number ): Number of deleted keys
-  // **Example:**
-  //	myCache.del( "myKey" )
+  /**
+   * Remove one or more keys from the cache.
+   * @param keyOrKeys - A key or array of keys to delete
+   * @returns The number of keys that were deleted
+   * @example
+   * myCache.del('myKey')
+   * myCache.del(['key1', 'key2'])
+   */
   del(keyOrKeys: Key | Key[]): number {
     // convert keys to an array of itself
     const keys = Array.isArray(keyOrKeys) ? keyOrKeys : [keyOrKeys]
@@ -256,10 +266,10 @@ export default class NodeCache<T> extends EventEmitter {
       // only delete if existent
       if (!!this.data[key]) {
         // calc the stats
-        this.stats.vsize -= this._getValLength(
-          this._unwrap(this.data[key], false),
+        this.stats.vsize -= this.#getValLength(
+          this.#unwrap(this.data[key], false),
         )
-        this.stats.ksize -= this._getKeyLength(key)
+        this.stats.ksize -= this.#getKeyLength(key)
         this.stats.keys--
         delCount++
 
@@ -274,13 +284,14 @@ export default class NodeCache<T> extends EventEmitter {
     return delCount
   }
 
-  // get the cached value and remove the key from the cache.
-  // Equivalent to calling `get(key)` + `del(key)`.
-  // Useful for implementing `single use` mechanism such as OTP, where once a value is read it will become obsolete.
-  // **Parameters:**
-  // * `key` ( String | Number ): cache key
-  // **Example:**
-  //	myCache.take "myKey", ( err, val )
+  /**
+   * Get and delete a key from cache in one operation.
+   * Useful for single-use values like OTPs where the value should be consumed only once.
+   * @param key - The cache key
+   * @returns The cached value, or undefined if not found
+   * @example
+   * const otp = myCache.take('otp-token')
+   */
   take(key: Key): T | undefined {
     const value = this.get(key)
     if (value !== undefined) {
@@ -289,17 +300,15 @@ export default class NodeCache<T> extends EventEmitter {
     return value
   }
 
-  // reset or redefine the ttl of a key. `ttl` = 0 means infinite lifetime.
-  // If `ttl` is not passed the default ttl is used.
-  // If `ttl` < 0 the key will be deleted.
-  // **Parameters:**
-  // * `key` ( String | Number ): cache key to reset the ttl value
-  // * `ttl` ( Number ): ( optional -> options.stdTTL || 0 ) The time to live in seconds
-  // **Return**
-  // ( Boolen ): key found and ttl set
-  // **Example:**
-  //	myCache.ttl( "myKey" ) // will set ttl to default ttl
-  //	myCache.ttl( "myKey", 1000 )
+  /**
+   * Reset or redefine the TTL of a key.
+   * @param key - The cache key
+   * @param ttl - Time to live in seconds (0 = infinite, negative = delete key)
+   * @returns true if the key was found and ttl was set, false otherwise
+   * @example
+   * myCache.ttl('myKey') // set to default TTL
+   * myCache.ttl('myKey', 1000) // set to 1000 seconds
+   */
   ttl(key: Key, ttl?: number): boolean {
     if (!key) {
       return false
@@ -309,10 +318,10 @@ export default class NodeCache<T> extends EventEmitter {
     const realTtl = ttl === undefined ? this.#options.stdTTL : ttl
     // check for existent data and update the ttl value
     const value: WrappedValue<T> = this.data[key]
-    if (value && this._check(key, value)) {
+    if (value && this.#check(key, value)) {
       // if ttl < 0 delete the key. otherwise reset the value
       if (realTtl >= 0) {
-        this.data[key] = this._wrap(value.v, realTtl, false)
+        this.data[key] = this.#wrap(value.v, realTtl, false)
       } else {
         this.del(key)
       }
@@ -321,13 +330,13 @@ export default class NodeCache<T> extends EventEmitter {
     return false
   }
 
-  // receive the ttl of a key.
-  // **Parameters:**
-  // * `key` ( String | Number ): cache key to check the ttl value of
-  // **Return**
-  // ( Number|undefined ): The timestamp in ms when the key will expire, 0 if it will never expire or undefined if it not exists
-  // **Example:**
-  //	myCache.getTtl( "myKey" )
+  /**
+   * Get the TTL (time to live) of a key.
+   * @param key - The cache key
+   * @returns The timestamp in ms when the key will expire, 0 if infinite, or undefined if not found
+   * @example
+   * const ttl = myCache.getTtl('myKey')
+   */
   getTtl(key: Key): number | undefined {
     if (!key) {
       return undefined
@@ -336,65 +345,54 @@ export default class NodeCache<T> extends EventEmitter {
 
     // check for existant data and update the ttl value
     const value: WrappedValue<T> = this.data[key]
-    if (value && this._check(key, value)) {
+    if (value && this.#check(key, value)) {
       return value.t
     }
     // return undefined if key has not been found
     return undefined
   }
 
-  // list all keys within this cache
-  // **Return**
-  // ( Array ): An array of all keys
-  // **Example:**
-  //     _keys = myCache.keys()
-  //     # [ "foo", "bar", "fizz", "buzz", "anotherKeys" ]
+  /**
+   * List all keys currently stored in the cache.
+   * @returns An array of all cache keys
+   * @example
+   * const allKeys = myCache.keys()
+   */
   keys(): Key[] {
     return Object.keys(this.data)
   }
 
-  // Check if a key is cached
-  // **Parameters:**
-  // * `key` ( String | Number ): cache key to check the ttl value
-  // **Return**
-  // ( Boolean ): A boolean that indicates if the key is cached
-  // **Example:**
-  //     _exists = myCache.has('myKey')
-  //     # true
+  /**
+   * Check if a key exists in the cache and is still valid.
+   * @param key - The cache key to check
+   * @returns true if the key exists and is not expired, false otherwise
+   * @example
+   * if (myCache.has('myKey')) {
+   *   console.log('Key exists!')
+   * }
+   */
   has(key: Key): boolean {
     const value: WrappedValue<T> = this.data[key]
-    return !!value && this._check(key, value)
+    return !!value && this.#check(key, value)
   }
 
-  // get the stats
-  // **Parameters:**
-  // -
-  // **Return**
-  // ( Object ): Stats data
-  // **Example:**
-  //     myCache.getStats()
-  //     # {
-  //     # hits: 0,
-  //     # misses: 0,
-  //     # keys: 0,
-  //     # ksize: 0,
-  //     # vsize: 0
-  //     # }
+  /**
+   * Get cache statistics.
+   * @returns Statistics object with hits, misses, keys count, and sizes
+   * @example
+   * const stats = myCache.getStats()
+   * console.log(stats.hits, stats.misses)
+   */
   getStats(): Stats {
     return this.stats
   }
 
-  // flush the whole data and reset the stats
-  // **Example:**
-  //     myCache.flushAll()
-  //     myCache.getStats()
-  //     # {
-  //     # hits: 0,
-  //     # misses: 0,
-  //     # keys: 0,
-  //     # ksize: 0,
-  //     # vsize: 0
-  //     # }
+  /**
+   * Clear all data from the cache and reset statistics.
+   * @param _startPeriod - Internal parameter for testing
+   * @example
+   * myCache.flushAll()
+   */
   flushAll(_startPeriod = true): void {
     // parameter just for testing
 
@@ -414,17 +412,11 @@ export default class NodeCache<T> extends EventEmitter {
     this.emit('flush')
   }
 
-  // flush the stats and reset all counters to 0
-  // **Example:**
-  //     myCache.flushStats()
-  //     myCache.getStats()
-  //     # {
-  //     # hits: 0,
-  //     # misses: 0,
-  //     # keys: 0,
-  //     # ksize: 0,
-  //     # vsize: 0
-  //     # }
+  /**
+   * Reset all statistics counters to 0 without clearing cached data.
+   * @example
+   * myCache.flushStats()
+   */
   flushStats() {
     // reset stats
     this.stats = {
@@ -437,16 +429,22 @@ export default class NodeCache<T> extends EventEmitter {
     this.emit('flush_stats')
   }
 
-  // This will clear the interval timeout which is set on checkperiod option.
+  /**
+   * Close the cache and stop the periodic cleanup process.
+   * @example
+   * myCache.close()
+   */
   close() {
     this.#killCheckPeriod()
   }
 
-  // internal housekeeping method.
-  // Check all the cached data and delete the invalid values
+  /**
+   * Internal housekeeping method that checks and deletes expired values.
+   * @internal
+   */
   _checkData(startPeriod = true): void {
     for (const [key, value] of Object.entries(this.data)) {
-      this._check(key, value)
+      this.#check(key, value)
     }
     if (startPeriod && this.#options.checkperiod > 0) {
       this.#timeout = setTimeout(
@@ -458,7 +456,10 @@ export default class NodeCache<T> extends EventEmitter {
     }
   }
 
-  // stop the checkdata period. Only needed to abort the script in testing mode.
+  /**
+   * Stop the periodic cleanup process (internal use).
+   * @internal
+   */
   #killCheckPeriod(): void {
     if (this.#timeout !== null) {
       clearTimeout(this.#timeout)
@@ -466,8 +467,11 @@ export default class NodeCache<T> extends EventEmitter {
     }
   }
 
-  // internal method the check the value. If it's not valid any more delete it
-  _check(key: Key, data: WrappedValue<T>): boolean {
+  /**
+   * Check if a value is still valid (internal use).
+   * @internal
+   */
+  #check(key: Key, data: WrappedValue<T>): boolean {
     let _retval = true
     // data is invalid if the ttl is too old and is not 0
     // console.log data.t < Date.now(), data.t, Date.now()
@@ -476,12 +480,15 @@ export default class NodeCache<T> extends EventEmitter {
         _retval = false
         this.del(key)
       }
-      this.emit('expired', key, this._unwrap(data))
+      this.emit('expired', key, this.#unwrap(data))
     }
     return _retval
   }
 
-  // internal method to check if the type of a key is either `number` or `string`
+  /**
+   * Validate that a key is of the correct type (internal use).
+   * @internal
+   */
   #checkKeyValidity(key: Key): void {
     const keyType = typeof key
 
@@ -490,8 +497,11 @@ export default class NodeCache<T> extends EventEmitter {
     }
   }
 
-  // internal method to wrap a value in an object with some metadata
-  _wrap<T>(value: T, ttl: number, asClone = true): WrappedValue<T> {
+  /**
+   * Wrap a value with metadata for storage (internal use).
+   * @internal
+   */
+  #wrap<T>(value: T, ttl: number, asClone = true): WrappedValue<T> {
     const useClone = !this.#options.useClones ? false : asClone
 
     // define the time to live
@@ -518,19 +528,28 @@ export default class NodeCache<T> extends EventEmitter {
     }
   }
 
-  // internal method to extract get the value out of the wrapped value
-  _unwrap(value: WrappedValue<T>, asClone = true): T {
+  /**
+   * Unwrap a stored value from its metadata (internal use).
+   * @internal
+   */
+  #unwrap(value: WrappedValue<T>, asClone = true): T {
     const useClone = !this.#options.useClones ? false : asClone
     return useClone ? clone(value.v) : value.v
   }
 
-  // internal method the calculate the key length
-  _getKeyLength(key: Key): number {
+  /**
+   * Calculate the length of a key (internal use).
+   * @internal
+   */
+  #getKeyLength(key: Key): number {
     return key.toString().length
   }
 
-  // internal method to calculate the value length
-  _getValLength(value: unknown): number {
+  /**
+   * Calculate the length of a value for statistics (internal use).
+   * @internal
+   */
+  #getValLength(value: unknown): number {
     if (typeof value === 'string') {
       return value.length
     } else if (this.#options.forceString) {
@@ -557,7 +576,10 @@ export default class NodeCache<T> extends EventEmitter {
     }
   }
 
-  // internal method to handle an error message
+  /**
+   * Throw a formatted error (internal use).
+   * @internal
+   */
   #throw(type: ERROR_CODE, payload: string = ''): void {
     // generate the error object
     const error: any = new Error()

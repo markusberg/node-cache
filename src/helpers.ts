@@ -44,8 +44,8 @@ export function randomNumber(max: number): number {
 
   @return {Object} Object with the diffed values
   */
-export function diffKeys(objA: object, objB: object): any {
-  let diff = {}
+export function diffKeys(objA: any, objB: any): any {
+  let diff: any = {}
   for (const key in objA) {
     if (objB.hasOwnProperty(key)) {
       diff[key] = objA[key] - objB[key]

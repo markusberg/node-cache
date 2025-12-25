@@ -23,7 +23,7 @@ dependency that node-cache has.
 To help minimize version confusion, the first version of this package is 6.0.0 which was supposed to
 be the next version of node-cache.
 
-The aim is to have v6.0.0 be compatible with node-cache v5.1.2 minus deprecations. Also, v6.0.0
+v6.0.0 is api compatible with node-cache v5.1.2 minus deprecations. Also, v6.0.0
 is [ESModule only](https://gist.github.com/sindresorhus/a39789f98801d908bbc7ff3ecc99d99c), and drops support for Node.Js versions below 20.
 
 # Install

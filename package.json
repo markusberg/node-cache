@@ -40,16 +40,19 @@
     }
   ],
   "type": "module",
-  "main": "./index.js",
-  "types": "./index.d.ts",
-  "homepage": "https://github.com/node-cache/node-cache",
+  "main": "./dist/node-cache.js",
+  "types": "./dist/node-cache.d.ts",
+  "exports": {
+    ".": "./dist/node-cache.js"
+  },
+  "homepage": "https://github.com/markusberg/node-cache",
   "repository": {
     "type": "git",
-    "url": "git://github.com/node-cache/node-cache.git"
+    "url": "git://github.com/markusberg/node-cache.git"
   },
   "license": "MIT",
   "engines": {
-    "node": ">= 22.0.0"
+    "node": ">= 20.0.0"
   },
   "scripts": {
     "build": "npm run clean && npm run build:prod",

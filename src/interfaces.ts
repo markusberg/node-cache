@@ -14,11 +14,11 @@ export interface Options {
    * @type {boolean}
    * @memberof Options
    */
-  forceString?: boolean
+  forceString: boolean
 
-  objectValueSize?: number
-  promiseValueSize?: number
-  arrayValueSize?: number
+  objectValueSize: number
+  promiseValueSize: number
+  arrayValueSize: number
 
   /**
    * standard time to live in seconds. 0 = infinity
@@ -26,7 +26,7 @@ export interface Options {
    * @type {number}
    * @memberof Options
    */
-  stdTTL?: number
+  stdTTL: number
 
   /**
    * time in seconds to check all data and delete expired keys
@@ -34,7 +34,7 @@ export interface Options {
    * @type {number}
    * @memberof Options
    */
-  checkperiod?: number
+  checkperiod: number
 
   /**
    * en/disable cloning of variables.
@@ -46,10 +46,9 @@ export interface Options {
    * @type {boolean}
    * @memberof Options
    */
-  useClones?: boolean
+  useClones: boolean
 
-  errorOnMissing?: boolean
-  deleteOnExpire?: boolean
+  deleteOnExpire: boolean
 
   /**
    * max amount of keys that are being stored.
@@ -58,7 +57,7 @@ export interface Options {
    * @type {number}
    * @memberof Options
    */
-  maxKeys?: number
+  maxKeys: number
 }
 
 export interface Stats {

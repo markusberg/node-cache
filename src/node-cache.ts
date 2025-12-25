@@ -10,7 +10,7 @@
 
 import clone from '@markusberg/clone'
 import { EventEmitter } from 'node:events'
-import {
+import type {
   ERROR_CODE,
   Key,
   Options,
@@ -29,7 +29,8 @@ export default class NodeCache<T> extends EventEmitter {
     ETTLTYPE: () => 'The ttl argument has to be a number.',
   }
 
-  options: Options = {
+  // default module options
+  #options: Options = {
     // convert all elements to string
     forceString: false,
     // used standard size for calculating value size
@@ -78,7 +79,7 @@ export default class NodeCache<T> extends EventEmitter {
     this._checkData = this._checkData.bind(this)
 
     // module options
-    this.options = { ...this.options, ...options }
+    this.#options = { ...this.#options, ...options }
 
     // initalize checking period
     this._checkData()
@@ -94,9 +95,10 @@ export default class NodeCache<T> extends EventEmitter {
     this.#checkKeyValidity(key)
 
     // get data and increment stats
-    if (this.data[key] != null && this._check(key, this.data[key])) {
+    const value = this.data[key]
+    if (!!value && this._check(key, value)) {
       this.stats.hits++
-      return this._unwrap(this.data[key])
+      return this._unwrap(value)
     }
     // if not found return undefined
     this.stats.misses++
@@ -114,13 +116,14 @@ export default class NodeCache<T> extends EventEmitter {
       this.#throw('EKEYSTYPE')
     }
     // define return
-    let oRet = {}
+    let oRet: Record<Key, T> = {}
     for (const key of keys) {
       this.#checkKeyValidity(key)
       // get data and increment stats
-      if (this.data[key] != null && this._check(key, this.data[key])) {
+      const value = this.data[key]
+      if (!!value && this._check(key, value)) {
         this.stats.hits++
-        oRet[key] = this._unwrap(this.data[key])
+        oRet[key] = this._unwrap(value)
       } else {
         // if not found return a error
         this.stats.misses++
@@ -140,11 +143,14 @@ export default class NodeCache<T> extends EventEmitter {
   //	myCache.set "myKey", "my_String Value", 10
   set(key: Key, value: T, ttl?: number): boolean {
     // check if cache is overflowing
-    if (this.options.maxKeys > -1 && this.stats.keys >= this.options.maxKeys) {
+    if (
+      this.#options.maxKeys > -1 &&
+      this.stats.keys >= this.#options.maxKeys
+    ) {
       this.#throw('ECACHEFULL')
     }
     // force the data to string
-    if (this.options.forceString && typeof value !== 'string') {
+    if (this.#options.forceString && typeof value !== 'string') {
       value = JSON.stringify(value) as T
     }
 
@@ -159,7 +165,7 @@ export default class NodeCache<T> extends EventEmitter {
       )
     }
     // set default ttl if not passed
-    const realTtl = ttl || this.options.stdTTL
+    const realTtl = ttl === undefined ? this.#options.stdTTL : ttl
 
     // set the value
     this.data[key] = this._wrap(value, realTtl)
@@ -210,8 +216,8 @@ export default class NodeCache<T> extends EventEmitter {
   mset(keyValueSet: ValueSetItem<T>[]): boolean {
     // check if cache is overflowing
     if (
-      this.options.maxKeys > -1 &&
-      this.stats.keys + keyValueSet.length >= this.options.maxKeys
+      this.#options.maxKeys > -1 &&
+      this.stats.keys + keyValueSet.length >= this.#options.maxKeys
     ) {
       this.#throw('ECACHEFULL')
     }
@@ -260,7 +266,8 @@ export default class NodeCache<T> extends EventEmitter {
         // delete the value
         const oldVal = this.data[key]
         delete this.data[key]
-        // return true
+
+        // emit deletion event
         this.emit('del', key, oldVal.v)
       }
     }
@@ -275,11 +282,11 @@ export default class NodeCache<T> extends EventEmitter {
   // **Example:**
   //	myCache.take "myKey", ( err, val )
   take(key: Key): T | undefined {
-    const _ret = this.get(key)
-    if (_ret != null) {
+    const value = this.get(key)
+    if (value !== undefined) {
       this.del(key)
     }
-    return _ret
+    return value
   }
 
   // reset or redefine the ttl of a key. `ttl` = 0 means infinite lifetime.
@@ -293,18 +300,19 @@ export default class NodeCache<T> extends EventEmitter {
   // **Example:**
   //	myCache.ttl( "myKey" ) // will set ttl to default ttl
   //	myCache.ttl( "myKey", 1000 )
-  ttl(key: Key, ttl: number): boolean {
+  ttl(key: Key, ttl?: number): boolean {
     if (!key) {
       return false
     }
     this.#checkKeyValidity(key)
 
-    const realTtl = ttl || this.options.stdTTL
+    const realTtl = ttl === undefined ? this.#options.stdTTL : ttl
     // check for existent data and update the ttl value
-    if (this.data[key] != null && this._check(key, this.data[key])) {
+    const value: WrappedValue<T> = this.data[key]
+    if (value && this._check(key, value)) {
       // if ttl < 0 delete the key. otherwise reset the value
       if (realTtl >= 0) {
-        this.data[key] = this._wrap(this.data[key].v, realTtl, false)
+        this.data[key] = this._wrap(value.v, realTtl, false)
       } else {
         this.del(key)
       }
@@ -327,8 +335,9 @@ export default class NodeCache<T> extends EventEmitter {
     this.#checkKeyValidity(key)
 
     // check for existant data and update the ttl value
-    if (this.data[key] != null && this._check(key, this.data[key])) {
-      return this.data[key].t
+    const value: WrappedValue<T> = this.data[key]
+    if (value && this._check(key, value)) {
+      return value.t
     }
     // return undefined if key has not been found
     return undefined
@@ -353,8 +362,8 @@ export default class NodeCache<T> extends EventEmitter {
   //     _exists = myCache.has('myKey')
   //     # true
   has(key: Key): boolean {
-    const exists = this.data[key] != null && this._check(key, this.data[key])
-    return exists
+    const value: WrappedValue<T> = this.data[key]
+    return !!value && this._check(key, value)
   }
 
   // get the stats
@@ -439,10 +448,10 @@ export default class NodeCache<T> extends EventEmitter {
     for (const [key, value] of Object.entries(this.data)) {
       this._check(key, value)
     }
-    if (startPeriod && this.options.checkperiod > 0) {
+    if (startPeriod && this.#options.checkperiod > 0) {
       this.#timeout = setTimeout(
         this._checkData,
-        this.options.checkperiod * 1000,
+        this.#options.checkperiod * 1000,
         startPeriod,
       )
       this.#timeout.unref()
@@ -463,7 +472,7 @@ export default class NodeCache<T> extends EventEmitter {
     // data is invalid if the ttl is too old and is not 0
     // console.log data.t < Date.now(), data.t, Date.now()
     if (data.t !== 0 && data.t < Date.now()) {
-      if (this.options.deleteOnExpire) {
+      if (this.#options.deleteOnExpire) {
         _retval = false
         this.del(key)
       }
@@ -483,9 +492,8 @@ export default class NodeCache<T> extends EventEmitter {
 
   // internal method to wrap a value in an object with some metadata
   _wrap<T>(value: T, ttl: number, asClone = true): WrappedValue<T> {
-    if (!this.options.useClones) {
-      asClone = false
-    }
+    const useClone = !this.#options.useClones ? false : asClone
+
     // define the time to live
     const now = Date.now()
     let livetime = 0
@@ -497,32 +505,23 @@ export default class NodeCache<T> extends EventEmitter {
       livetime = now + ttl * ttlMultiplicator
     } else {
       // use standard ttl
-      if (this.options.stdTTL === 0) {
-        livetime = this.options.stdTTL
+      if (this.#options.stdTTL === 0) {
+        livetime = this.#options.stdTTL
       } else {
-        livetime = now + this.options.stdTTL * ttlMultiplicator
+        livetime = now + this.#options.stdTTL * ttlMultiplicator
       }
     }
     // return the wrapped value
     return {
       t: livetime,
-      v: asClone ? clone(value) : value,
+      v: useClone ? clone(value) : value,
     }
   }
 
   // internal method to extract get the value out of the wrapped value
-  _unwrap<T>(value: WrappedValue<T>, asClone = true): T | null {
-    if (!this.options.useClones) {
-      asClone = false
-    }
-    if (value.v != null) {
-      if (asClone) {
-        return clone(value.v)
-      } else {
-        return value.v
-      }
-    }
-    return null
+  _unwrap(value: WrappedValue<T>, asClone = true): T {
+    const useClone = !this.#options.useClones ? false : asClone
+    return useClone ? clone(value.v) : value.v
   }
 
   // internal method the calculate the key length
@@ -533,31 +532,23 @@ export default class NodeCache<T> extends EventEmitter {
   // internal method to calculate the value length
   _getValLength(value: unknown): number {
     if (typeof value === 'string') {
-      // if the value is a String get the real length
       return value.length
-    } else if (this.options.forceString) {
-      // force string if it's defined and not passed
+    } else if (this.#options.forceString) {
       return JSON.stringify(value).length
     } else if (Array.isArray(value)) {
       // if the data is an Array multiply each element with a defined default length
-      return this.options.arrayValueSize * value.length
+      return this.#options.arrayValueSize * value.length
     } else if (typeof value === 'number') {
       return 8
-    } else if (
-      typeof (value != null ? (value as any).then : void 0) === 'function'
-    ) {
+    } else if (value instanceof Promise) {
       // if the data is a Promise, use defined default
       // (can't calculate actual/resolved value size synchronously)
-      return this.options.promiseValueSize
-    } else if (
-      typeof Buffer !== 'undefined' && Buffer !== null
-        ? Buffer.isBuffer(value)
-        : void 0
-    ) {
-      return (value as any).length
-    } else if (value != null && typeof value === 'object') {
+      return this.#options.promiseValueSize
+    } else if (Buffer.isBuffer(value)) {
+      return value.length
+    } else if (!!value && typeof value === 'object') {
       // if the data is an Object multiply each element with a defined default length
-      return this.options.objectValueSize * Object.keys(value).length
+      return this.#options.objectValueSize * Object.keys(value).length
     } else if (typeof value === 'boolean') {
       return 8
     } else {
@@ -567,7 +558,7 @@ export default class NodeCache<T> extends EventEmitter {
   }
 
   // internal method to handle an error message
-  #throw(type: ERROR_CODE, payload?: string): void {
+  #throw(type: ERROR_CODE, payload: string = ''): void {
     // generate the error object
     const error: any = new Error()
     error.name = type

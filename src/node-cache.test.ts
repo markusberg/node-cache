@@ -7,35 +7,32 @@ import clone from '@markusberg/clone'
 import nodeCache from './node-cache.js'
 import { randomNumber, randomString, diffKeys, wait } from './helpers.js'
 
-import type { Key } from './interfaces.js'
+import type { Key, ValueSetItem } from './interfaces.js'
 
 const pkg = JSON.parse(readFileSync('package.json').toString())
 
 let localCache: any = new nodeCache({ stdTTL: 0 })
 
-let localCacheTTL: any = new nodeCache({
-  stdTTL: 0.3,
-  checkperiod: 0,
-})
-
-let BENCH = {}
+// let BENCH = {}
 
 // just for testing disable the check period
 localCache.close()
 
 describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => {
-  after(() => {
-    let txt = `Benchmark node@${process.version}:`
-    for (const type in BENCH) {
-      const ops = BENCH[type]
-      txt += `\n   - ${type}: ${ops.toFixed(1)} ops/s`
-    }
-    console.log(txt)
-  })
+  // after(() => {
+  //   let txt = `Benchmark node@${process.version}:`
+  //   for (const type in BENCH) {
+  //     const ops = BENCH[type]
+  //     txt += `\n   - ${type}: ${ops.toFixed(1)} ops/s`
+  //   }
+  //   console.log(txt)
+  // })
 
   describe('general sync-style', () => {
-    let state
-    let localCache
+    let state: Record<string, any>
+    let localCache: nodeCache<
+      string | number | object | Promise<unknown> | Map<unknown, unknown>
+    >
 
     before(() => {
       localCache = new nodeCache({ stdTTL: 0 })
@@ -132,11 +129,11 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       assert.equal(false, localCache.has(testKey))
     })
     it('update key (and get it to check if the update worked)', () => {
-      let res = localCache.set(state.key, state.value2, 0)
-      assert.equal(true, res)
+      assert.equal(true, localCache.set(state.key, state.value2, 0))
+
       // check if the update worked
-      res = localCache.get(state.key)
-      assert.equal(state.value2, res)
+      assert.equal(state.value2, localCache.get(state.key))
+
       // stats should not have changed
       assert.equal(1, localCache.getStats().keys - state.start.keys)
     })
@@ -204,7 +201,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
 
       // but should deep equal
       assert.deepEqual(state.obj, res)
-      res.b.y = 42
+      ;(res as any).b.y = 42
       const res2 = localCache.get('clone')
       assert.deepEqual(state.obj, res2)
     })
@@ -236,7 +233,8 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       })
       localCache.set('promise', p)
       const q = localCache.get('promise')
-      q.then((value) => {
+      assert.equal(true, q instanceof Promise)
+      ;(q as Promise<string>).then((value) => {
         assert.equal(deferred_value, value)
         callStub()
       })
@@ -252,7 +250,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       ])
       localCache.set(testKey, map)
       map.set('fourthkey', 'fourthvalue')
-      const cached_map = localCache.get(testKey)
+      const cached_map = localCache.get(testKey) as Map<string, string>
       assert.equal(cached_map.get('2ndkey'), '2ndvalue')
       assert.equal(cached_map.get('fourthkey'), undefined)
     })
@@ -288,7 +286,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
   })
 
   describe('max key amount', () => {
-    let state
+    let state: Record<string, string>
     const localCacheMaxKeys = new nodeCache({ maxKeys: 2 })
 
     before(() => {
@@ -320,7 +318,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
   })
   describe('correct and incorrect key types', () => {
     describe('number', () => {
-      let state
+      let state: Record<string, any>
       before(() => {
         state = {
           keys: [],
@@ -344,7 +342,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         const res = localCache.mget(state.keys.slice(0, 2))
 
         // generate prediction
-        const prediction = {}
+        const prediction: Record<string, string> = {}
         prediction[state.keys[0]] = state.val
         prediction[state.keys[1]] = state.val
         assert.deepEqual(prediction, res)
@@ -378,7 +376,8 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       })
     })
     describe('string', () => {
-      let state
+      let state: Record<string, any>
+
       before(() => {
         state = {
           keys: [],
@@ -401,7 +400,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       it('mget', () => {
         const res = localCache.mget(state.keys.slice(0, 2))
         // generate prediction
-        const prediction = {}
+        const prediction: Record<string, string> = {}
         prediction[state.keys[0]] = state.val
         prediction[state.keys[1]] = state.val
         assert.deepEqual(prediction, res)
@@ -433,7 +432,8 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       })
     })
     describe('boolean - invalid type', () => {
-      let state
+      let state: { keys: boolean[]; val: string }
+
       before(() => {
         state = {
           keys: [true, false],
@@ -491,17 +491,11 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       })
     })
     describe('object - invalid type', () => {
-      let state
+      let state: { keys: object[]; val: string }
+
       before(() => {
         state = {
-          keys: [
-            {
-              a: 1,
-            },
-            {
-              b: 2,
-            },
-          ],
+          keys: [{ a: 1 }, { b: 2 }],
           val: randomString(20),
         }
       })
@@ -557,7 +551,14 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('flush', () => {
-    let state
+    let state: {
+      n: number
+      count: number
+      startKeys: number
+      keys: Key[]
+      val: string
+    }
+
     before(() => {
       state = {
         n: 0,
@@ -584,7 +585,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('flushStats', () => {
-    let cache = null
+    let cache: nodeCache<string>
     before(() => {
       cache = new nodeCache()
     })
@@ -603,7 +604,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('many', () => {
-    let state
+    let state: { n: number; count: number; keys: Key[]; val: string }
     return before(() => {
       state = {
         n: 0,
@@ -618,7 +619,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('delete', () => {
-    let state
+    let state: Record<string, any>
 
     before(() => {
       state = {
@@ -653,7 +654,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('stats', () => {
-    let state
+    let state: Record<string, any>
 
     before(() => {
       state = {
@@ -705,7 +706,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('multi', () => {
-    let state
+    let state: Record<string, any>
 
     before(() => {
       state = {
@@ -757,8 +758,15 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('ttl', () => {
-    let state
+    let state: Record<string, any>
+    let localCacheTTL: nodeCache<string>
+
     before(() => {
+      localCacheTTL = new nodeCache({
+        stdTTL: 0.3,
+        checkperiod: 0,
+      })
+
       state = {
         n: 0,
         val: randomString(20),
@@ -840,7 +848,8 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       assert.equal(undefined, localCache.get(state.key2))
     })
     describe('test the automatic check', async () => {
-      let innerState = null
+      let innerState: { startKeys: number; key: Key; val: string }
+
       before(async () => {
         await wait(1000)
         innerState = {
@@ -863,7 +872,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         assert.equal(innerState.val, localCache.get(innerState.key))
       })
       it("wait for 'expired' event", async () => {
-        localCache.once('expired', (key, val) => {
+        localCache.once('expired', (key: Key, val: string) => {
           assert.equal(innerState.key, key)
           assert.equal(false, state.keys.includes(key))
           assert.equal(undefined, localCache.data[key])
@@ -986,11 +995,11 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('mset', () => {
-    let state
-    let localCacheMset
+    let state: { keyValueSet: ValueSetItem<string>[] }
+    let localCacheMset: nodeCache<string>
 
     beforeEach(() => {
-      localCacheMset = new nodeCache({ stdTTL: 0 })
+      localCacheMset = new nodeCache<string>({ stdTTL: 0 })
     })
 
     before(() => {
@@ -1019,7 +1028,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       assert.equal(2, localCacheMset.getStats().keys)
     })
     it('mset - boolean key throw error', () => {
-      state.keyValueSet[0].key = true
+      state.keyValueSet[0].key = true as any
       assert.throws(() => localCacheMset.mset(state.keyValueSet), {
         name: 'EKEYTYPE',
         message:
@@ -1027,9 +1036,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       })
     })
     it('mset - object key throw error', () => {
-      state.keyValueSet[0].key = {
-        a: 1,
-      }
+      state.keyValueSet[0].key = { a: 1 } as any
       assert.throws(() => localCacheMset.mset(state.keyValueSet), {
         name: 'EKEYTYPE',
         message:
@@ -1037,9 +1044,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       })
     })
     it('mset - ttl type error check', () => {
-      state.keyValueSet[0].ttl = {
-        a: 1,
-      }
+      state.keyValueSet[0].ttl = { a: 1 } as any
       assert.throws(() => localCacheMset.mset(state.keyValueSet), {
         name: 'ETTLTYPE',
         message: 'The ttl argument has to be a number.',
@@ -1047,7 +1052,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('fetch', () => {
-    let state
+    let state: { func: () => string }
 
     beforeEach(() => {
       localCache.flushAll()
@@ -1088,7 +1093,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
   })
   describe('Issues', () => {
     describe('#151 - cannot set null', () => {
-      let cache
+      let cache: nodeCache<any>
 
       before(() => {
         cache = new nodeCache()
@@ -1106,12 +1111,12 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
 
     // This test is intentionally skipped since v6
     describe.skip("#197 - ReferenceError: Buffer is not defined (maybe we should have a general 'browser compatibility' test-suite?", () => {
-      let cache
+      let cache: nodeCache<object>
       let globalBuffer = global.Buffer
       before(() => {
         // make `Buffer` globally unavailable
         // we have to explicitly set to `undefined` because our `clone` dependency checks for that
-        global.Buffer = void 0
+        ;(global.Buffer as any) = undefined
         cache = new nodeCache()
       })
       it('should not throw when setting a key of type `object` (or any other type that gets tested after `Buffer` in `_getValLength()`) when `Buffer` is not available in the global scope', () => {
@@ -1126,7 +1131,8 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
 
     describe('#263 - forceString never works', () => {
-      let cache
+      let cache: nodeCache<string>
+
       before(() => {
         cache = new nodeCache({ forceString: true })
       })
@@ -1134,13 +1140,13 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         cache.close()
       })
       it('set the value `null` - this should transform into a string', () => {
-        cache.set('test', null)
+        cache.set('test', null as any)
         assert.equal(cache.get('test'), 'null')
       })
       it("set the value `{ hello: 'World' }` - this should transform into a string", () => {
         cache.set('test', {
           hello: 'World',
-        })
+        } as any)
         assert.equal(cache.get('test'), '{"hello":"World"}')
       })
     })

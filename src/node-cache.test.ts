@@ -372,7 +372,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         assert.equal(true, ref < 510)
       })
       after(() => {
-        localCache.flushAll(false)
+        localCache.flushAll()
       })
     })
     describe('string', () => {
@@ -879,7 +879,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         })
         await wait(550)
         // trigger ttl check, which will trigger the `expired` event
-        localCache._checkData(false)
+        localCache._checkData()
       })
     })
     describe('more ttl tests', () => {
@@ -931,7 +931,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         await wait(350)
         const res = localCacheTTL.get(state.key5)
         assert.equal(undefined, res)
-        localCacheTTL._checkData(false)
+        localCacheTTL._checkData()
         // deep dirty check if key was deleted
         assert.equal(undefined, localCacheTTL.data[state.key5])
       })

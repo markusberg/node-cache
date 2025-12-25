@@ -52,7 +52,11 @@ export default class NodeCache<T> extends EventEmitter {
   }
 
   // container for cached data
-  data: Record<Key, WrappedValue<T>> = {}
+  #data: Map<Key, WrappedValue<T>> = new Map()
+
+  get data(): Record<Key, WrappedValue<T>> {
+    return Object.fromEntries(this.#data)
+  }
 
   // statistics container
   stats: Stats = {
@@ -72,20 +76,8 @@ export default class NodeCache<T> extends EventEmitter {
   constructor(options: Partial<Options> = {}) {
     super()
 
-    /**
-     * FIXME:
-     * This is an artifact from the coffeescript to javascript compilation
-     * Every other one has been removed, but this one remains because
-     * a test fails otherwise. Weird.
-     */
-    this._checkData = this._checkData.bind(this)
-
-    // module options
     this.#options = { ...this.#options, ...options }
-
-    // initalize checking period
-    this._checkData()
-    return
+    this.#checkData()
   }
 
   /**
@@ -99,11 +91,12 @@ export default class NodeCache<T> extends EventEmitter {
     this.#checkKeyValidity(key)
 
     // get data and increment stats
-    const value = this.data[key]
-    if (!!value && this.#check(key, value)) {
+    const value = this.#data.get(key)
+    if (value && this.#check(key, value)) {
       this.stats.hits++
       return this.#unwrap(value)
     }
+
     // if not found return undefined
     this.stats.misses++
     return undefined
@@ -121,22 +114,23 @@ export default class NodeCache<T> extends EventEmitter {
     if (!Array.isArray(keys)) {
       this.#throw('EKEYSTYPE')
     }
+
     // define return
-    let oRet: Record<Key, T> = {}
+    const returnMap: Map<Key, T> = new Map()
     for (const key of keys) {
       this.#checkKeyValidity(key)
       // get data and increment stats
-      const value = this.data[key]
-      if (!!value && this.#check(key, value)) {
+      const value = this.#data.get(key)
+      if (value && this.#check(key, value)) {
         this.stats.hits++
-        oRet[key] = this.#unwrap(value)
+        returnMap.set(key, this.#unwrap(value))
       } else {
         // if not found return a error
         this.stats.misses++
       }
     }
     // return all found keys
-    return oRet
+    return Object.fromEntries(returnMap)
   }
 
   /**
@@ -163,26 +157,24 @@ export default class NodeCache<T> extends EventEmitter {
     }
 
     this.#checkKeyValidity(key)
-    // internal helper variables
-    let alreadyExists = !!this.data[key]
-    if (alreadyExists) {
+
+    if (this.#data.has(key)) {
       // remove existing data from stats
-      alreadyExists = true
       this.stats.vsize -= this.#getValLength(
-        this.#unwrap(this.data[key], false),
+        this.#unwrap(this.#data.get(key)!, false),
       )
+    } else {
+      this.stats.ksize += this.#getKeyLength(key)
+      this.stats.keys++
     }
     // set default ttl if not passed
     const realTtl = ttl === undefined ? this.#options.stdTTL : ttl
 
-    // set the value
-    this.data[key] = this.#wrap(value, realTtl)
+    // set the value and update stats
+    this.#data.set(key, this.#wrap(value, realTtl))
     this.stats.vsize += this.#getValLength(value)
+
     // only add the keys and key-size if the key is new
-    if (!alreadyExists) {
-      this.stats.ksize += this.#getKeyLength(key)
-      this.stats.keys++
-    }
     this.emit('set', key, value)
     return true
   }
@@ -263,22 +255,19 @@ export default class NodeCache<T> extends EventEmitter {
     for (const key of keys) {
       this.#checkKeyValidity(key)
 
-      // only delete if existent
-      if (!!this.data[key]) {
-        // calc the stats
-        this.stats.vsize -= this.#getValLength(
-          this.#unwrap(this.data[key], false),
-        )
+      const value = this.#data.get(key)
+      if (value) {
+        // update statistics
+        this.stats.vsize -= this.#getValLength(this.#unwrap(value, false))
         this.stats.ksize -= this.#getKeyLength(key)
         this.stats.keys--
         delCount++
 
-        // delete the value
-        const oldVal = this.data[key]
-        delete this.data[key]
+        // delete the entry from cache
+        this.#data.delete(key)
 
         // emit deletion event
-        this.emit('del', key, oldVal.v)
+        this.emit('del', key, value.v)
       }
     }
     return delCount
@@ -317,11 +306,11 @@ export default class NodeCache<T> extends EventEmitter {
 
     const realTtl = ttl === undefined ? this.#options.stdTTL : ttl
     // check for existent data and update the ttl value
-    const value: WrappedValue<T> = this.data[key]
+    const value: WrappedValue<T> | undefined = this.#data.get(key)
     if (value && this.#check(key, value)) {
       // if ttl < 0 delete the key. otherwise reset the value
       if (realTtl >= 0) {
-        this.data[key] = this.#wrap(value.v, realTtl, false)
+        this.#data.set(key, this.#wrap(value.v, realTtl, false))
       } else {
         this.del(key)
       }
@@ -338,17 +327,13 @@ export default class NodeCache<T> extends EventEmitter {
    * const ttl = myCache.getTtl('myKey')
    */
   getTtl(key: Key): number | undefined {
-    if (!key) {
-      return undefined
-    }
     this.#checkKeyValidity(key)
 
     // check for existant data and update the ttl value
-    const value: WrappedValue<T> = this.data[key]
+    const value: WrappedValue<T> | undefined = this.#data.get(key)
     if (value && this.#check(key, value)) {
       return value.t
     }
-    // return undefined if key has not been found
     return undefined
   }
 
@@ -359,7 +344,7 @@ export default class NodeCache<T> extends EventEmitter {
    * const allKeys = myCache.keys()
    */
   keys(): Key[] {
-    return Object.keys(this.data)
+    return Array.from(this.#data.keys())
   }
 
   /**
@@ -372,8 +357,11 @@ export default class NodeCache<T> extends EventEmitter {
    * }
    */
   has(key: Key): boolean {
-    const value: WrappedValue<T> = this.data[key]
-    return !!value && this.#check(key, value)
+    const value: WrappedValue<T> | undefined = this.#data.get(key)
+    if (value) {
+      return this.#check(key, value)
+    }
+    return false
   }
 
   /**
@@ -393,11 +381,12 @@ export default class NodeCache<T> extends EventEmitter {
    * @example
    * myCache.flushAll()
    */
-  flushAll(_startPeriod = true): void {
+  flushAll(): void {
     // parameter just for testing
 
-    // set data empty
-    this.data = {}
+    // reset cache data to empty Map
+    this.#data.clear()
+
     // reset stats
     this.stats = {
       hits: 0,
@@ -408,7 +397,7 @@ export default class NodeCache<T> extends EventEmitter {
     }
     // reset check period
     this.#killCheckPeriod()
-    this._checkData(_startPeriod)
+    this.#checkData()
     this.emit('flush')
   }
 
@@ -442,17 +431,24 @@ export default class NodeCache<T> extends EventEmitter {
    * Internal housekeeping method that checks and deletes expired values.
    * @internal
    */
-  _checkData(startPeriod = true): void {
-    for (const [key, value] of Object.entries(this.data)) {
-      this.#check(key, value)
-    }
-    if (startPeriod && this.#options.checkperiod > 0) {
+  #checkData(): void {
+    this._checkData()
+
+    if (this.#options.checkperiod > 0) {
       this.#timeout = setTimeout(
-        this._checkData,
+        () => this.#checkData(),
         this.#options.checkperiod * 1000,
-        startPeriod,
       )
       this.#timeout.unref()
+    }
+  }
+
+  /**
+   * Check current data without setting a timer
+   */
+  _checkData(): void {
+    for (const [key, value] of this.#data) {
+      this.#check(key, value)
     }
   }
 

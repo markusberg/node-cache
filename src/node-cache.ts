@@ -22,7 +22,14 @@ import type {
 export * from './interfaces.js'
 
 export default class NodeCache<T> extends EventEmitter {
-  ERRORS: Record<ERROR_CODE, (key: string) => string> = {
+  constructor(options: Partial<Options> = {}) {
+    super()
+
+    this.#options = { ...this.#options, ...options }
+    this.#checkData()
+  }
+
+  #ERRORS: Record<ERROR_CODE, (key: string) => string> = {
     ENOTFOUND: (key: string) => `Key \`${key}\` not found`,
     ECACHEFULL: () => 'Cache max keys amount exceeded',
     EKEYTYPE: (key: string) =>
@@ -53,7 +60,7 @@ export default class NodeCache<T> extends EventEmitter {
 
   // container for cached data
   #data: Map<Key, WrappedValue<T>> = new Map()
-
+  // expose data for testing
   get data(): Record<Key, WrappedValue<T>> {
     return Object.fromEntries(this.#data)
   }
@@ -73,13 +80,6 @@ export default class NodeCache<T> extends EventEmitter {
   // timeout object for checkperiod
   #timeout: NodeJS.Timeout | null = null
 
-  constructor(options: Partial<Options> = {}) {
-    super()
-
-    this.#options = { ...this.#options, ...options }
-    this.#checkData()
-  }
-
   /**
    * Get a cached key and update statistics.
    * @param key - The cache key (string or number)
@@ -88,7 +88,7 @@ export default class NodeCache<T> extends EventEmitter {
    * const value = myCache.get('myKey')
    */
   get(key: Key): T | undefined {
-    this.#checkKeyValidity(key)
+    this.#validateKey(key)
 
     // get data and increment stats
     const value = this.#data.get(key)
@@ -112,13 +112,13 @@ export default class NodeCache<T> extends EventEmitter {
   mget(keys: Key[]): Record<Key, T> {
     // convert a string to an array of one key
     if (!Array.isArray(keys)) {
-      this.#throw('EKEYSTYPE')
+      throw this.#err('EKEYSTYPE')
     }
 
     // define return
     const returnMap: Map<Key, T> = new Map()
     for (const key of keys) {
-      this.#checkKeyValidity(key)
+      this.#validateKey(key)
       // get data and increment stats
       const value = this.#data.get(key)
       if (value && this.#check(key, value)) {
@@ -144,19 +144,14 @@ export default class NodeCache<T> extends EventEmitter {
    * myCache.set('myKey', 'myValue', 10) // expires in 10 seconds
    */
   set(key: Key, value: T, ttl?: number): boolean {
-    // check if cache is overflowing
-    if (
-      this.#options.maxKeys > -1 &&
-      this.stats.keys >= this.#options.maxKeys
-    ) {
-      this.#throw('ECACHEFULL')
-    }
+    this.#validateMaxKeys(1)
+
     // force the data to string
     if (this.#options.forceString && typeof value !== 'string') {
       value = JSON.stringify(value) as T
     }
 
-    this.#checkKeyValidity(key)
+    this.#validateKey(key)
 
     if (this.#data.has(key)) {
       // remove existing data from stats
@@ -167,8 +162,7 @@ export default class NodeCache<T> extends EventEmitter {
       this.stats.ksize += this.#getKeyLength(key)
       this.stats.keys++
     }
-    // set default ttl if not passed
-    const realTtl = ttl === undefined ? this.#options.stdTTL : ttl
+    const realTtl = this.#normalizeTtl(ttl)
 
     // set the value and update stats
     this.#data.set(key, this.#wrap(value, realTtl))
@@ -190,17 +184,32 @@ export default class NodeCache<T> extends EventEmitter {
    * myCache.fetch('myKey', 10, () => expensiveComputation())
    * myCache.fetch('myKey', 'staticValue')
    */
-  fetch(key: Key, ttl: any, value: T | undefined) {
+  fetch(key: Key, ttl: number, valueOrFn: T | (() => T)): T
+  fetch(key: Key, valueOrFn: T | (() => T)): T
+  fetch(key: Key, ttl: number | T | (() => T), valueOrFn?: T | (() => T)): T {
     // check if cache is hit
-    if (this.has(key)) {
-      return this.get(key)
+    const val = this.get(key)
+    if (val !== undefined) {
+      return val
     }
-    if (typeof value === 'undefined') {
-      value = ttl
-      ttl = void 0
+
+    let realTtl: number | undefined
+    let realValue: T | (() => T)
+
+    if (valueOrFn === undefined) {
+      realTtl = undefined
+      realValue = ttl as T | (() => T)
+    } else {
+      if (typeof ttl !== 'number') {
+        throw this.#err('ETTLTYPE')
+      }
+      realTtl = ttl as number
+      realValue = valueOrFn
     }
-    const _ret = typeof value === 'function' ? value() : value
-    this.set(key, _ret, ttl)
+
+    const _ret: T =
+      typeof realValue === 'function' ? (realValue as () => T)() : realValue
+    this.set(key, _ret, realTtl)
     return _ret
   }
 
@@ -215,25 +224,16 @@ export default class NodeCache<T> extends EventEmitter {
    * ])
    */
   mset(keyValueSet: ValueSetItem<T>[]): boolean {
-    // check if cache is overflowing
-    if (
-      this.#options.maxKeys > -1 &&
-      this.stats.keys + keyValueSet.length >= this.#options.maxKeys
-    ) {
-      this.#throw('ECACHEFULL')
-    }
+    this.#validateMaxKeys(keyValueSet.length)
 
     // loop over keyValueSet to validate key and ttl
     for (const keyValuePair of keyValueSet) {
       const { key, val, ttl } = keyValuePair
       // check if there is ttl and it's a number
       if (ttl && typeof ttl !== 'number') {
-        this.#throw('ETTLTYPE')
+        throw this.#err('ETTLTYPE')
       }
-      this.#checkKeyValidity(key)
-    }
-    for (const keyValuePair of keyValueSet) {
-      const { key, val, ttl } = keyValuePair
+      this.#validateKey(key)
       this.set(key, val, ttl)
     }
     return true
@@ -253,7 +253,7 @@ export default class NodeCache<T> extends EventEmitter {
 
     let delCount = 0
     for (const key of keys) {
-      this.#checkKeyValidity(key)
+      this.#validateKey(key)
 
       const value = this.#data.get(key)
       if (value) {
@@ -299,12 +299,9 @@ export default class NodeCache<T> extends EventEmitter {
    * myCache.ttl('myKey', 1000) // set to 1000 seconds
    */
   ttl(key: Key, ttl?: number): boolean {
-    if (!key) {
-      return false
-    }
-    this.#checkKeyValidity(key)
+    this.#validateKey(key)
 
-    const realTtl = ttl === undefined ? this.#options.stdTTL : ttl
+    const realTtl: number = this.#normalizeTtl(ttl)
     // check for existent data and update the ttl value
     const value: WrappedValue<T> | undefined = this.#data.get(key)
     if (value && this.#check(key, value)) {
@@ -327,7 +324,7 @@ export default class NodeCache<T> extends EventEmitter {
    * const ttl = myCache.getTtl('myKey')
    */
   getTtl(key: Key): number | undefined {
-    this.#checkKeyValidity(key)
+    this.#validateKey(key)
 
     // check for existant data and update the ttl value
     const value: WrappedValue<T> | undefined = this.#data.get(key)
@@ -482,15 +479,43 @@ export default class NodeCache<T> extends EventEmitter {
   }
 
   /**
-   * Validate that a key is of the correct type (internal use).
+   * Validate that a key is of the correct type
    * @internal
    */
-  #checkKeyValidity(key: Key): void {
+  #validateKey(key: Key): void {
     const keyType = typeof key
 
     if (!this.validKeyTypes.includes(keyType)) {
-      this.#throw('EKEYTYPE', keyType)
+      throw this.#err('EKEYTYPE', keyType)
     }
+  }
+
+  /**
+   * Throws an error if the provided number of keys would cause the cache to exceed maxKeys.
+   * @param num - The number of keys to validate
+   */
+  #validateMaxKeys(num: number): void {
+    if (
+      this.#options.maxKeys > -1 &&
+      this.stats.keys + num > this.#options.maxKeys
+    ) {
+      throw this.#err('ECACHEFULL')
+    }
+  }
+
+  /**
+   * Normalize ttl value. If undefined, returns default ttl. If a number, returns it.
+   * @param ttl - requested ttl
+   * @returns
+   */
+  #normalizeTtl(ttl: unknown): number {
+    if (ttl === undefined) {
+      return this.#options.stdTTL
+    }
+    if (typeof ttl === 'number') {
+      return ttl
+    }
+    throw this.#err('ETTLTYPE')
   }
 
   /**
@@ -502,21 +527,8 @@ export default class NodeCache<T> extends EventEmitter {
 
     // define the time to live
     const now = Date.now()
-    let livetime = 0
-    const ttlMultiplicator = 1000
-    // use given ttl
-    if (ttl === 0) {
-      livetime = 0
-    } else if (ttl) {
-      livetime = now + ttl * ttlMultiplicator
-    } else {
-      // use standard ttl
-      if (this.#options.stdTTL === 0) {
-        livetime = this.#options.stdTTL
-      } else {
-        livetime = now + this.#options.stdTTL * ttlMultiplicator
-      }
-    }
+    const livetime = ttl === 0 ? 0 : now + ttl * 1000
+
     // return the wrapped value
     return {
       t: livetime,
@@ -573,16 +585,16 @@ export default class NodeCache<T> extends EventEmitter {
   }
 
   /**
-   * Throw a formatted error (internal use).
+   * Generate an error to be thrown
    * @internal
    */
-  #throw(type: ERROR_CODE, payload: string = ''): void {
+  #err(type: ERROR_CODE, payload: string = ''): Error {
     // generate the error object
     const error: any = new Error()
     error.name = type
     error.errorcode = type
-    error.message = this.ERRORS[type](payload)
+    error.message = this.#ERRORS[type](payload)
     error.data = payload
-    throw error
+    return error
   }
 }

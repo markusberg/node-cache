@@ -5,37 +5,40 @@ import { beforeEach, describe, it, before, after } from 'node:test'
 import clone from '@markusberg/clone'
 
 import nodeCache from './node-cache.js'
-import { randomNumber, randomString, diffKeys, wait } from './helpers.js'
+import { randomNumber, randomString, diffStats, wait } from './helpers.js'
 
-import type { Key, ValueSetItem } from './interfaces.js'
+import type { Key, Stats, ValueSetItem } from './interfaces.js'
 
 const pkg = JSON.parse(readFileSync('package.json').toString())
 
-let localCache: any = new nodeCache({ stdTTL: 0 })
-
-// let BENCH = {}
-
-// just for testing disable the check period
-localCache.close()
+const BENCH: Record<string, number> = {}
 
 describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => {
-  // after(() => {
-  //   let txt = `Benchmark node@${process.version}:`
-  //   for (const type in BENCH) {
-  //     const ops = BENCH[type]
-  //     txt += `\n   - ${type}: ${ops.toFixed(1)} ops/s`
-  //   }
-  //   console.log(txt)
-  // })
+  after(() => {
+    let txt = `Benchmark node@${process.version}:`
+    for (const [type, ops] of Object.entries(BENCH)) {
+      txt += `\n   - ${type}: ${ops.toFixed(1)} ops/s`
+    }
+    console.log(txt)
+  })
 
   describe('general sync-style', () => {
-    let state: Record<string, any>
+    let state: {
+      start: Stats
+      key: string
+      value: string
+      value2: string
+      value3: string
+      obj: object
+      otp: string
+    }
     let localCache: nodeCache<
       string | number | object | Promise<unknown> | Map<unknown, unknown>
     >
 
     before(() => {
       localCache = new nodeCache({ stdTTL: 0 })
+
       state = {
         start: clone(localCache.getStats()),
         value: randomString(100),
@@ -51,9 +54,6 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         },
         otp: randomString(10),
       }
-    })
-    after(() => {
-      localCache.close()
     })
     it('set key', () => {
       const res = localCache.set(state.key, state.value, 0)
@@ -286,7 +286,14 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
   })
 
   describe('max key amount', () => {
-    let state: Record<string, string>
+    let state: {
+      key1: string
+      key2: string
+      key3: string
+      value1: string
+      value2: string
+      value3: string
+    }
     const localCacheMaxKeys = new nodeCache({ maxKeys: 2 })
 
     before(() => {
@@ -318,8 +325,12 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
   })
   describe('correct and incorrect key types', () => {
     describe('number', () => {
-      let state: Record<string, any>
+      let state: { keys: number[]; val: string }
+      let localCache: nodeCache<string>
+
       before(() => {
+        localCache = new nodeCache({ stdTTL: 0 })
+
         state = {
           keys: [],
           val: randomString(20),
@@ -367,18 +378,25 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         const success = localCache.ttl(state.keys[4], 0.5)
         assert.equal(true, success)
         const ttl = localCache.getTtl(state.keys[4])
-        const ref = ttl - now
-        assert.equal(true, 485 < ref)
-        assert.equal(true, ref < 510)
+        assert.notEqual(ttl, undefined)
+
+        if (ttl !== undefined) {
+          const ref = ttl - now
+          assert.equal(true, 485 < ref)
+          assert.equal(true, ref < 510)
+        }
       })
       after(() => {
         localCache.flushAll()
       })
     })
     describe('string', () => {
-      let state: Record<string, any>
+      let state: { keys: string[]; val: string }
+      let localCache: nodeCache<string>
 
       before(() => {
+        localCache = new nodeCache({ stdTTL: 0 })
+
         state = {
           keys: [],
           val: randomString(20),
@@ -426,15 +444,22 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         const success = localCache.ttl(state.keys[4], 0.5)
         assert.equal(true, success)
         const ttl = localCache.getTtl(state.keys[4])
-        const ref = ttl - now
-        assert.equal(true, 485 < ref)
-        assert.equal(true, ref < 510)
+
+        assert.notEqual(ttl, undefined)
+        if (ttl !== undefined) {
+          const ref = ttl - now
+          assert.equal(true, 485 < ref)
+          assert.equal(true, ref < 510)
+        }
       })
     })
     describe('boolean - invalid type', () => {
-      let state: { keys: boolean[]; val: string }
+      let state: { keys: any[]; val: string }
+      let localCache: nodeCache<string>
 
       before(() => {
+        localCache = new nodeCache({ stdTTL: 0 })
+
         state = {
           keys: [true, false],
           val: randomString(20),
@@ -491,9 +516,12 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       })
     })
     describe('object - invalid type', () => {
-      let state: { keys: object[]; val: string }
+      let state: { keys: any[]; val: string }
+      let localCache: nodeCache<string>
 
       before(() => {
+        localCache = new nodeCache({ stdTTL: 0 })
+
         state = {
           keys: [{ a: 1 }, { b: 2 }],
           val: randomString(20),
@@ -559,7 +587,11 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       val: string
     }
 
+    let localCache: nodeCache<string>
+
     before(() => {
+      localCache = new nodeCache({ stdTTL: 0 })
+
       state = {
         n: 0,
         count: 100,
@@ -572,14 +604,14 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       for (let j = 0; j < state.count; j++) {
         const key = randomString(7)
         state.keys.push(key)
-        localCache.set(key)
+        localCache.set(key, state.val)
         state.n++
       }
       assert.equal(state.count, state.n)
       assert.equal(state.startKeys + state.count, localCache.getStats().keys)
     })
     it('flush keys', () => {
-      localCache.flushAll(false)
+      localCache.flushAll()
       assert.equal(0, localCache.getStats().keys)
       assert.deepEqual({}, localCache.data)
     })
@@ -588,6 +620,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     let cache: nodeCache<string>
     before(() => {
       cache = new nodeCache()
+      cache.close()
     })
     it('set cache and flush stats value', () => {
       const key = randomString(10)
@@ -604,6 +637,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('many', () => {
+    // FIXME: this test doesn't do anything
     let state: { n: number; count: number; keys: Key[]; val: string }
     return before(() => {
       state = {
@@ -619,9 +653,12 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('delete', () => {
-    let state: Record<string, any>
+    let state: { n: number; count: number; keys: Key[]; val: string }
+    let localCache: nodeCache<string>
 
     before(() => {
+      localCache = new nodeCache({ stdTTL: 0 })
+
       state = {
         n: 0,
         count: 100000,
@@ -654,9 +691,20 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('stats', () => {
-    let state: Record<string, any>
+    let state: {
+      n: number
+      start: Stats
+      count: number
+      keylength: number
+      valuelength: number
+      keys: Key[]
+      values: string[]
+    }
+    let localCache: nodeCache<string>
 
     before(() => {
+      localCache = new nodeCache({ stdTTL: 0 })
+
       state = {
         n: 0,
         start: clone(localCache.getStats()),
@@ -684,8 +732,8 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         assert.equal(1, localCache.del(state.keys[i]))
         state.n++
       }
-      const after = localCache.getStats()
-      const diff = diffKeys(after, state.start)
+      const after: Stats = localCache.getStats()
+      const diff: Stats = diffStats(after, state.start)
       assert.equal(diff.hits, 5)
       assert.equal(diff.keys, 5)
       assert.equal(diff.ksize, state.count * state.keylength)
@@ -697,8 +745,8 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         assert.equal(undefined, localCache.get('xxxx'))
         state.n++
       }
-      const after = localCache.getStats()
-      const diff = diffKeys(after, state.start)
+      const after: Stats = localCache.getStats()
+      const diff = diffStats(after, state.start)
       assert.equal(diff.misses, 5)
     })
     it('check successful runs', () => {
@@ -706,15 +754,28 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('multi', () => {
-    let state: Record<string, any>
+    let state: {
+      n: number
+      count: number
+      startKeys: number
+      value: string
+      keys: Key[]
+      getKeys: Key[]
+      prediction: Record<Key, string>
+    }
+    let localCache: nodeCache<string>
 
     before(() => {
+      localCache = new nodeCache({ stdTTL: 0 })
+
       state = {
         n: 0,
         count: 100,
         startKeys: localCache.getStats().keys,
         value: randomString(20),
         keys: [],
+        getKeys: [],
+        prediction: {},
       }
       for (let i = 0; i < state.count; i++) {
         const key = randomString(7)
@@ -724,18 +785,14 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         localCache.set(key, state.value, 0)
         state.n++
       }
-    })
-    it('generate a sub-list of keys', () => {
+
       state.getKeys = state.keys.splice(50, 5)
-    })
-    it('generate prediction', () => {
-      state.prediction = {}
       for (const key of state.getKeys) {
         state.prediction[key] = state.value
       }
     })
     it('try to mget with a single key', () => {
-      assert.throws(() => localCache.mget(state.getKeys[0]), {
+      assert.throws(() => localCache.mget(state.getKeys[0] as any), {
         name: 'EKEYSTYPE',
         message: 'The keys argument has to be an array.',
       })
@@ -760,8 +817,11 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
   describe('ttl', () => {
     let state: Record<string, any>
     let localCacheTTL: nodeCache<string>
+    let localCache: nodeCache<string>
 
     before(() => {
+      localCache = new nodeCache({ stdTTL: 0 })
+
       localCacheTTL = new nodeCache({
         stdTTL: 0.3,
         checkperiod: 0,
@@ -794,7 +854,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         assert.equal(true, res)
         assert.equal(state.val, localCacheTTL.get(state.key6))
       })
-      return it('and after it timed out', async () => {
+      it('and after it timed out', async () => {
         await wait(800)
         const res = localCacheTTL.has(state.key6)
         assert.equal(false, res)
@@ -806,7 +866,20 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       const res = localCache.set(state.key1, state.val, 0.7)
       assert.equal(true, res)
       const ts = localCache.getTtl(state.key1)
-      assert.equal(false, state.now < ts && ts < state.now + 300)
+      assert.equal(true, typeof ts === 'number')
+      if (ts !== undefined) {
+        assert.equal(false, state.now < ts && ts < state.now + 300)
+      }
+    })
+    it('should throw when the ttl is neither number nor undefined', () => {
+      const testKey = randomString()
+      const testValue = randomString()
+      const res = localCache.set(testKey, testValue)
+      assert.equal(true, res)
+      assert.throws(() => localCache.ttl(testKey, 'invalid ttl' as any), {
+        name: 'ETTLTYPE',
+        message: 'The ttl argument has to be a number.',
+      })
     })
     it('check this key immediately', () => {
       assert.equal(state.val, localCache.get(state.key1))
@@ -905,7 +978,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         assert.equal(undefined, res)
         assert.equal(undefined, localCache.data[state.key3])
       })
-      it("set a key with ttl = 100s (default: infinite), reset it's ttl to default and check if it still exists", () => {
+      it('set a key with ttl = 100s (default: infinite), reset its ttl to default and check if it still exists', () => {
         assert.equal(true, localCache.set(state.key4, state.val, 100))
         // check immediately
         assert.equal(state.val, localCache.get(state.key4))
@@ -917,7 +990,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         const res = localCache.get(state.key4)
         assert.equal(state.val, res)
       })
-      it("set a key with ttl = 100s (default: 0.3s), reset it's ttl to default, check if it still exists, and wait for its timeout", async () => {
+      it('set a key with ttl = 100s (default: 0.3s), reset its ttl to default, check if it still exists, and wait for its timeout', async () => {
         assert.equal(true, localCacheTTL.set(state.key5, state.val, 100))
         // check immediately
         assert.equal(state.val, localCacheTTL.get(state.key5))
@@ -936,6 +1009,18 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         assert.equal(undefined, localCacheTTL.data[state.key5])
       })
 
+      it('should delete a key whose TTL is set to a negative number', async () => {
+        let testKey = randomString(10)
+        let testValue = randomString(10)
+        assert.equal(true, localCacheTTL.set(testKey, testValue))
+        assert.equal(testValue, localCacheTTL.get(testKey))
+
+        // set ttl to negative value
+        assert.equal(true, localCacheTTL.ttl(testKey, -1))
+        // and verify that it's been deleted
+        assert.equal(undefined, localCacheTTL.get(testKey))
+      })
+
       it('set a key key with a cache initialized with no automatic delete on expire', async () => {
         const localCacheNoDelete = new nodeCache({
           stdTTL: 0.3,
@@ -949,7 +1034,6 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         assert.equal(state.val, res)
       })
       it('test issue #78 with expire event not fired', async () => {
-        // this.timeout(6000)
         const localCacheTTL2 = new nodeCache({
           stdTTL: 1,
           checkperiod: 0.5,
@@ -971,15 +1055,26 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     })
   })
   describe('clone', () => {
+    let fnCache: nodeCache<Function>
+    let rxCache: nodeCache<RegExp>
+
+    before(() => {
+      fnCache = new nodeCache({ stdTTL: 0 })
+      rxCache = new nodeCache({ stdTTL: 0 })
+    })
+
     it('a function', async () => {
       const testKey = randomString(10)
       const testValue = 'hello world'
       const testValueFn = () => {
         return testValue
       }
-      localCache.set(testKey, testValueFn)
-      const fn = localCache.get(testKey)
-      assert.equal(fn(), testValue)
+      fnCache.set(testKey, testValueFn)
+      const fn = fnCache.get(testKey)
+      assert.notEqual(fn, undefined)
+      if (fn !== undefined) {
+        assert.equal(fn(), testValue)
+      }
     })
     it('a regex', () => {
       const testKey = randomString(10)
@@ -988,10 +1083,13 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       const noMatch = 'bla'
       assert.equal(true, regex.test(match))
       assert.equal(false, regex.test(noMatch))
-      localCache.set(testKey, regex)
-      const cachedRegex = localCache.get(testKey)
-      assert.equal(true, cachedRegex.test(match))
-      assert.equal(false, cachedRegex.test(noMatch))
+      rxCache.set(testKey, regex)
+      const cachedRegex = rxCache.get(testKey)
+      assert.notEqual(cachedRegex, undefined)
+      if (cachedRegex !== undefined) {
+        assert.equal(true, cachedRegex.test(match))
+        assert.equal(false, cachedRegex.test(noMatch))
+      }
     })
   })
   describe('mset', () => {
@@ -999,7 +1097,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
     let localCacheMset: nodeCache<string>
 
     beforeEach(() => {
-      localCacheMset = new nodeCache<string>({ stdTTL: 0 })
+      localCacheMset = new nodeCache<string>({ stdTTL: 0, maxKeys: 2 })
     })
 
     before(() => {
@@ -1016,18 +1114,18 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         ],
       }
     })
-    it('mset an array of key value pairs', () => {
+    it('should set multiple key value pairs', () => {
       const res = localCacheMset.mset(state.keyValueSet)
       assert.equal(true, res)
       assert.equal(2, localCacheMset.getStats().keys)
     })
-    it('mset - integer key', () => {
+    it('should set multiple key value pairs with integer keys', () => {
       state.keyValueSet[0].key = randomNumber(10)
       const res = localCacheMset.mset(state.keyValueSet)
       assert.equal(true, res)
       assert.equal(2, localCacheMset.getStats().keys)
     })
-    it('mset - boolean key throw error', () => {
+    it('should throw on boolean key', () => {
       state.keyValueSet[0].key = true as any
       assert.throws(() => localCacheMset.mset(state.keyValueSet), {
         name: 'EKEYTYPE',
@@ -1035,7 +1133,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
           'The key argument has to be of type `string` or `number`. Found: `boolean`',
       })
     })
-    it('mset - object key throw error', () => {
+    it('should throw on object key', () => {
       state.keyValueSet[0].key = { a: 1 } as any
       assert.throws(() => localCacheMset.mset(state.keyValueSet), {
         name: 'EKEYTYPE',
@@ -1043,19 +1141,30 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
           'The key argument has to be of type `string` or `number`. Found: `object`',
       })
     })
-    it('mset - ttl type error check', () => {
+    it('should throw on ttl type error', () => {
       state.keyValueSet[0].ttl = { a: 1 } as any
       assert.throws(() => localCacheMset.mset(state.keyValueSet), {
         name: 'ETTLTYPE',
         message: 'The ttl argument has to be a number.',
       })
     })
+    it('should throw when maxKeys exceeded', () => {
+      state.keyValueSet.push({
+        key: randomString(10),
+        val: randomString(10),
+      })
+      assert.throws(() => localCacheMset.mset(state.keyValueSet), {
+        name: 'ECACHEFULL',
+        message: 'Cache max keys amount exceeded',
+      })
+    })
   })
   describe('fetch', () => {
     let state: { func: () => string }
+    let localCache: nodeCache<string>
 
     beforeEach(() => {
-      localCache.flushAll()
+      localCache = new nodeCache({ stdTTL: 0 })
 
       state = {
         func: () => {
@@ -1089,6 +1198,15 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
       it('swap ttl and value', () => {
         assert.equal('foo', localCache.fetch('key', state.func))
       })
+    })
+    it('should throw when value is provided, but ttl is not a number', () => {
+      assert.throws(
+        () => localCache.fetch('key', 'invalid ttl' as any, state.func),
+        {
+          name: 'ETTLTYPE',
+          message: 'The ttl argument has to be a number.',
+        },
+      )
     })
   })
   describe('Issues', () => {

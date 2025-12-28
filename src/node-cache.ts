@@ -1,11 +1,9 @@
 /*
- * @markusberg/node-cache 6.0.0 ( 2025-12-23 )
- * https://github.com/node-cache/node-cache
+ * @markusberg/node-cache
+ * https://github.com/markusberg/node-cache
  *
  * Released under the MIT license
- * https://github.com/node-cache/node-cache/blob/master/LICENSE
- *
- * Maintained by  (  )
+ * https://github.com/markusberg/node-cache/blob/master/LICENSE
  */
 
 import clone from '@markusberg/clone'
@@ -42,7 +40,7 @@ export default class NodeCache<T> extends EventEmitter {
   #options: Options = {
     // convert all elements to string
     forceString: false,
-    // used standard size for calculating value size
+    // used standard size for calculating value sizes
     objectValueSize: 80,
     promiseValueSize: 80,
     arrayValueSize: 40,
@@ -64,9 +62,13 @@ export default class NodeCache<T> extends EventEmitter {
   get data(): Record<Key, WrappedValue<T>> {
     return Object.fromEntries(this.#data)
   }
+  // get a copy of the stats data structure
+  get stats(): Stats {
+    return structuredClone(this.#stats)
+  }
 
   // statistics container
-  stats: Stats = {
+  #stats: Stats = {
     hits: 0,
     misses: 0,
     keys: 0,
@@ -90,15 +92,13 @@ export default class NodeCache<T> extends EventEmitter {
   get(key: Key): T | undefined {
     this.#validateKey(key)
 
-    // get data and increment stats
-    const value = this.#data.get(key)
+    const value: WrappedValue<T> | undefined = this.#data.get(key)
     if (value && this.#check(key, value)) {
-      this.stats.hits++
+      this.#stats.hits++
       return this.#unwrap(value)
     }
 
-    // if not found return undefined
-    this.stats.misses++
+    this.#stats.misses++
     return undefined
   }
 
@@ -115,18 +115,16 @@ export default class NodeCache<T> extends EventEmitter {
       throw this.#err('EKEYSTYPE')
     }
 
-    // define return
+    // define return data structure
     const returnMap: Map<Key, T> = new Map()
     for (const key of keys) {
       this.#validateKey(key)
-      // get data and increment stats
-      const value = this.#data.get(key)
+      const value: WrappedValue<T> | undefined = this.#data.get(key)
       if (value && this.#check(key, value)) {
-        this.stats.hits++
+        this.#stats.hits++
         returnMap.set(key, this.#unwrap(value))
       } else {
-        // if not found return a error
-        this.stats.misses++
+        this.#stats.misses++
       }
     }
     // return all found keys
@@ -153,20 +151,19 @@ export default class NodeCache<T> extends EventEmitter {
 
     this.#validateKey(key)
 
-    if (this.#data.has(key)) {
+    const currentValue: WrappedValue<T> | undefined = this.#data.get(key)
+    if (currentValue) {
       // remove existing data from stats
-      this.stats.vsize -= this.#getValLength(
-        this.#unwrap(this.#data.get(key)!, false),
-      )
+      this.#stats.vsize -= this.#getValLength(this.#unwrap(currentValue, false))
     } else {
-      this.stats.ksize += this.#getKeyLength(key)
-      this.stats.keys++
+      this.#stats.ksize += this.#getKeyLength(key)
+      this.#stats.keys++
     }
     const realTtl = this.#normalizeTtl(ttl)
 
     // set the value and update stats
     this.#data.set(key, this.#wrap(value, realTtl))
-    this.stats.vsize += this.#getValLength(value)
+    this.#stats.vsize += this.#getValLength(value)
 
     // only add the keys and key-size if the key is new
     this.emit('set', key, value)
@@ -183,12 +180,12 @@ export default class NodeCache<T> extends EventEmitter {
    * @example
    * myCache.fetch('myKey', 10, () => expensiveComputation())
    * myCache.fetch('myKey', 'staticValue')
+   * @deprecated The order of the ttl and value parameters will switch in version 7.0
    */
   fetch(key: Key, ttl: number, valueOrFn: T | (() => T)): T
   fetch(key: Key, valueOrFn: T | (() => T)): T
   fetch(key: Key, ttl: number | T | (() => T), valueOrFn?: T | (() => T)): T {
-    // check if cache is hit
-    const val = this.get(key)
+    const val: T | undefined = this.get(key)
     if (val !== undefined) {
       return val
     }
@@ -196,6 +193,8 @@ export default class NodeCache<T> extends EventEmitter {
     let realTtl: number | undefined
     let realValue: T | (() => T)
 
+    // FIXME: This will be fixed in v7.0
+    // possibly switch the two last parameters because their order is messed up
     if (valueOrFn === undefined) {
       realTtl = undefined
       realValue = ttl as T | (() => T)
@@ -248,19 +247,18 @@ export default class NodeCache<T> extends EventEmitter {
    * myCache.del(['key1', 'key2'])
    */
   del(keyOrKeys: Key | Key[]): number {
-    // convert keys to an array of itself
     const keys = Array.isArray(keyOrKeys) ? keyOrKeys : [keyOrKeys]
 
     let delCount = 0
     for (const key of keys) {
       this.#validateKey(key)
 
-      const value = this.#data.get(key)
+      const value: WrappedValue<T> | undefined = this.#data.get(key)
       if (value) {
         // update statistics
-        this.stats.vsize -= this.#getValLength(this.#unwrap(value, false))
-        this.stats.ksize -= this.#getKeyLength(key)
-        this.stats.keys--
+        this.#stats.vsize -= this.#getValLength(this.#unwrap(value, false))
+        this.#stats.ksize -= this.#getKeyLength(key)
+        this.#stats.keys--
         delCount++
 
         // delete the entry from cache
@@ -282,7 +280,7 @@ export default class NodeCache<T> extends EventEmitter {
    * const otp = myCache.take('otp-token')
    */
   take(key: Key): T | undefined {
-    const value = this.get(key)
+    const value: T | undefined = this.get(key)
     if (value !== undefined) {
       this.del(key)
     }
@@ -372,6 +370,16 @@ export default class NodeCache<T> extends EventEmitter {
     return this.stats
   }
 
+  #resetStats(): void {
+    this.#stats = {
+      hits: 0,
+      misses: 0,
+      keys: 0,
+      ksize: 0,
+      vsize: 0,
+    }
+  }
+
   /**
    * Clear all data from the cache and reset statistics.
    * @param _startPeriod - Internal parameter for testing
@@ -379,19 +387,10 @@ export default class NodeCache<T> extends EventEmitter {
    * myCache.flushAll()
    */
   flushAll(): void {
-    // parameter just for testing
-
-    // reset cache data to empty Map
+    // clear current cache data and stats
     this.#data.clear()
+    this.#resetStats()
 
-    // reset stats
-    this.stats = {
-      hits: 0,
-      misses: 0,
-      keys: 0,
-      ksize: 0,
-      vsize: 0,
-    }
     // reset check period
     this.#killCheckPeriod()
     this.#checkData()
@@ -404,23 +403,17 @@ export default class NodeCache<T> extends EventEmitter {
    * myCache.flushStats()
    */
   flushStats() {
-    // reset stats
-    this.stats = {
-      hits: 0,
-      misses: 0,
-      keys: 0,
-      ksize: 0,
-      vsize: 0,
-    }
+    this.#resetStats()
     this.emit('flush_stats')
   }
 
   /**
-   * Close the cache and stop the periodic cleanup process.
+   * Stop the periodic cleanup process
    * @example
    * myCache.close()
    */
   close() {
+    // FIXME: doing this should set the checkPeriod to 0, otherwise it will start again on flushAll()
     this.#killCheckPeriod()
   }
 
@@ -429,7 +422,9 @@ export default class NodeCache<T> extends EventEmitter {
    * @internal
    */
   #checkData(): void {
-    this._checkData()
+    for (const [key, value] of this.#data) {
+      this.#check(key, value)
+    }
 
     if (this.#options.checkperiod > 0) {
       this.#timeout = setTimeout(
@@ -437,15 +432,6 @@ export default class NodeCache<T> extends EventEmitter {
         this.#options.checkperiod * 1000,
       )
       this.#timeout.unref()
-    }
-  }
-
-  /**
-   * Check current data without setting a timer
-   */
-  _checkData(): void {
-    for (const [key, value] of this.#data) {
-      this.#check(key, value)
     }
   }
 
@@ -461,18 +447,20 @@ export default class NodeCache<T> extends EventEmitter {
   }
 
   /**
-   * Check if a value is still valid (internal use).
+   * Check if a key/value pair is still valid
    * @internal
    */
   #check(key: Key, data: WrappedValue<T>): boolean {
     let _retval = true
-    // data is invalid if the ttl is too old and is not 0
-    // console.log data.t < Date.now(), data.t, Date.now()
+
     if (data.t !== 0 && data.t < Date.now()) {
+      // FIXME: this behavior feels illogical
+      // The data is expired, but this function returns true because the deleteOnExpire option is set to false
       if (this.#options.deleteOnExpire) {
         _retval = false
         this.del(key)
       }
+
       this.emit('expired', key, this.#unwrap(data))
     }
     return _retval
@@ -497,7 +485,7 @@ export default class NodeCache<T> extends EventEmitter {
   #validateMaxKeys(num: number): void {
     if (
       this.#options.maxKeys > -1 &&
-      this.stats.keys + num > this.#options.maxKeys
+      this.#stats.keys + num > this.#options.maxKeys
     ) {
       throw this.#err('ECACHEFULL')
     }
@@ -523,16 +511,11 @@ export default class NodeCache<T> extends EventEmitter {
    * @internal
    */
   #wrap<T>(value: T, ttl: number, asClone = true): WrappedValue<T> {
-    const useClone = !this.#options.useClones ? false : asClone
+    const msExpiration = ttl === 0 ? 0 : Date.now() + ttl * 1000
 
-    // define the time to live
-    const now = Date.now()
-    const livetime = ttl === 0 ? 0 : now + ttl * 1000
-
-    // return the wrapped value
     return {
-      t: livetime,
-      v: useClone ? clone(value) : value,
+      t: msExpiration,
+      v: this.#options.useClones && asClone ? clone(value) : value,
     }
   }
 
@@ -541,8 +524,7 @@ export default class NodeCache<T> extends EventEmitter {
    * @internal
    */
   #unwrap(value: WrappedValue<T>, asClone = true): T {
-    const useClone = !this.#options.useClones ? false : asClone
-    return useClone ? clone(value.v) : value.v
+    return this.#options.useClones && asClone ? clone(value.v) : value.v
   }
 
   /**
@@ -559,14 +541,18 @@ export default class NodeCache<T> extends EventEmitter {
    */
   #getValLength(value: unknown): number {
     if (typeof value === 'string') {
-      return value.length
+      return Buffer.byteLength(value, 'utf-8')
     } else if (this.#options.forceString) {
       return JSON.stringify(value).length
+    } else if (ArrayBuffer.isView(value)) {
+      return (value as any).byteLength
     } else if (Array.isArray(value)) {
       // if the data is an Array multiply each element with a defined default length
       return this.#options.arrayValueSize * value.length
     } else if (typeof value === 'number') {
       return 8
+    } else if (typeof value === 'bigint') {
+      return 16 // rough estimate
     } else if (value instanceof Promise) {
       // if the data is a Promise, use defined default
       // (can't calculate actual/resolved value size synchronously)

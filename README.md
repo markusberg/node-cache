@@ -12,19 +12,24 @@ A simple caching module that has `set`, `get` and `delete` methods and works a l
 Keys can have a timeout (`ttl`) after which they expire and are deleted from the cache.
 All keys are stored in a single object so the practical limit is at around 1m keys.
 
+## Changelog
+
+See [changelog.md](./CHANGELOG.md)
+
 ## Fork information
 
 This package is a fork of the original [node-cache](https://www.npmjs.com/package/node-cache) package
 that's currently unmaintained. It is a TypeScript migration of both the node-cache library and its tests.
 The migration of this package is the reason for my previous migration of the
-[clone](https://www.npmjs.com/package/@markusberg/clone) library, because that package is the only hard
+[clone](https://www.npmjs.com/package/@markusberg/clone) library, because that package is the only
 dependency that node-cache has.
 
 To help minimize version confusion, the first version of this package is 6.0.0 which was supposed to
 be the next version of node-cache.
 
-v6.0.0 is api compatible with node-cache v5.1.2 minus deprecations. Also, v6.0.0
-is [ESModule only](https://gist.github.com/sindresorhus/a39789f98801d908bbc7ff3ecc99d99c), and drops support for Node.Js versions below 20.
+v6.0.0 is api compatible with node-cache v5.1.2 minus deprecations. Internal methods (prefixed with underscore) are now private methods
+which will cause you errors if you rely on them. Also, v6.0.0 is
+[ESModule only](https://gist.github.com/sindresorhus/a39789f98801d908bbc7ff3ecc99d99c), and supports Node.Js versions greater than 20.
 
 # Install
 
@@ -33,8 +38,6 @@ npm install @markusberg/node-cache
 ```
 
 # Examples:
-
-## Initialize (INIT):
 
 ```TypeScript
 import NodeCache from '@markusberg/node-cache'
@@ -48,10 +51,9 @@ const myCache = new NodeCache<T>()
 - `checkperiod`: _(default: `600`)_ The period in seconds, as a number, used for the automatic delete check interval.
   `0` = no periodic check.
 - `useClones`: _(default: `true`)_ en/disable cloning of variables. If `true` you'll get a copy of the cached variable. If `false` you'll save and get just the reference.  
-  **Note:** - `true` is recommended if you want **simplicity**, because it'll behave like a server-based cache (it caches copies of plain data). - `false` is recommended if you want to achieve **performance** or save mutable objects or other complex types with mutability involved and wanted, because it'll only store references of your data. - _Here's a [simple code example](https://runkit.com/mpneuried/useclones-example-83) showing the different behavior_
+  **Note:** - `true` is recommended if you want **simplicity**, because it'll behave like a server-based cache (it caches copies of plain data). - `false` is recommended if you want to achieve **performance** or save mutable objects or other complex types with mutability involved and wanted, because it'll only store references of your data.
 - `deleteOnExpire`: _(default: `true`)_ whether variables will be deleted automatically when they expire.
   If `true` the variable will be deleted. If `false` the variable will remain. You are encouraged to handle the variable upon the event `expired` by yourself.
-- `enableLegacyCallbacks`: _(default: `false`)_ re-enables the usage of callbacks instead of sync functions. Adds an additional `cb` argument to each function which resolves to `(err, result)`. will be removed in node-cache v6.x.
 - `maxKeys`: _(default: `-1`)_ specifies a maximum amount of keys that can be stored in the cache. If a new item is set and the cache is full, an error is thrown and the key will not be saved in the cache. -1 disables the key limit.
 
 ```TypeScript

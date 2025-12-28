@@ -7,3 +7,4 @@
 .node-version
 .prettierrc
 tsconfig.*
+report.*.json

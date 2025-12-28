@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/github/license/markusberg/node-cache.svg)](./LICENSE)
 [![downloads](https://img.shields.io/npm/dt/@markusberg/node-cache.svg)](http://npm-stat.com/charts.html?package=@markusberg/node-cache)
 
-# Simple and fast NodeJS internal caching.
+# Simple and fast NodeJS internal caching
 
 A simple caching module that has `set`, `get` and `delete` methods and works a little bit like memcached.
 Keys can have a timeout (`ttl`) after which they expire and are deleted from the cache.

@@ -10,52 +10,49 @@ export interface WrappedValue<T> {
 export interface Options {
   /**
    * If enabled, all values will be stringified during the set operation
-   *
-   * @type {boolean}
-   * @memberof Options
+   * @default false
    */
   forceString: boolean
 
+  /**
+   * Default sizes of specific objects
+   */
   objectValueSize: number
   promiseValueSize: number
   arrayValueSize: number
 
   /**
-   * standard time to live in seconds. 0 = infinity
-   *
-   * @type {number}
-   * @memberof Options
+   * Standard time to live in seconds. 0 = infinity
+   * @default 0
    */
   stdTTL: number
 
   /**
-   * time in seconds to check all data and delete expired keys
-   *
-   * @type {number}
-   * @memberof Options
+   * Interval in seconds between cache-wide expiration checks
+   * @default 600
    */
   checkperiod: number
 
   /**
-   * en/disable cloning of variables.
-   * disabling this is strongly encouraged when aiming for performance!
+   * Enable/disable cloning of values
+   * Disabling this is strongly encouraged when aiming for performance!
    *
-   * If `true`: set operations store a clone of the value and get operations will create a fresh clone of the cached value
+   * If `true` set operations store a clone of the value and get operations will create a fresh clone of the cached value
    * If `false` you'll just store a reference to your value
-   *
-   * @type {boolean}
-   * @memberof Options
+   * @default true
    */
   useClones: boolean
 
+  /**
+   * Delete the key/values from the cache on expiration
+   * @default true
+   */
   deleteOnExpire: boolean
 
   /**
-   * max amount of keys that are being stored.
-   * set operations will throw an error when the cache is full
-   *
-   * @type {number}
-   * @memberof Options
+   * The maximum number of keys to be stored. When cache is full,
+   * set operations will throw an error
+   * @default -1
    */
   maxKeys: number
 }
@@ -68,6 +65,9 @@ export interface Stats {
   vsize: number
 }
 
+/**
+ * When setting multiple values at once, an array of ValueSetItems is passed to mset
+ */
 export type ValueSetItem<T> = {
   key: Key
   val: T

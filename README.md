@@ -61,10 +61,6 @@ import NodeCache from '@markusberg/node-cache'
 const myCache = new NodeCache({ stdTTL: 100, checkperiod: 120 })
 ```
 
-**Since `4.1.0`**:
-_Key-validation_: The keys can be given as either `string` or `number`, but are casted to a `string` internally anyway.
-All other types will throw an error.
-
 ## Store a key (SET):
 
 `myCache.set(key, val, [ ttl ])`
@@ -145,10 +141,10 @@ expired. If the value was found it returns an object with the `key` `value` pair
 ```TypeScript
 const value = myCache.mget(['myKeyA', 'myKeyB', 'nonExistentKey', 'expiredKey'])
 /*
-	{
-		"myKeyA": { my: "Special", variable: 123 },
-		"myKeyB": { the: "Glory", answer: 42 }
-	}
+  {
+    "myKeyA": { my: "Special", variable: 123 },
+    "myKeyB": { the: "Glory", answer: 42 }
+  }
 */
 ```
 
@@ -270,14 +266,14 @@ Returns the statistics.
 ```TypeScript
 myCache.getStats()
 /*
-		{
-			keys: 0,    // global key count
-			hits: 0,    // global hit count
-			misses: 0,  // global miss count
-			ksize: 0,   // global key size count in approximately bytes
-			vsize: 0    // global value size count in approximately bytes
-		}
-	*/
+    {
+      keys: 0,    // global key count
+      hits: 0,    // global hit count
+      misses: 0,  // global miss count
+      ksize: 0,   // global key size count in approximately bytes
+      vsize: 0    // global value size count in approximately bytes
+    }
+  */
 ```
 
 ## Flush all data (FLUSH):
@@ -290,14 +286,14 @@ Flush all data.
 myCache.flushAll()
 myCache.getStats()
 /*
-		{
-			keys: 0,    // global key count
-			hits: 0,    // global hit count
-			misses: 0,  // global miss count
-			ksize: 0,   // global key size count in approximately bytes
-			vsize: 0    // global value size count in approximately bytes
-		}
-	*/
+    {
+      keys: 0,    // global key count
+      hits: 0,    // global hit count
+      misses: 0,  // global miss count
+      ksize: 0,   // global key size count in approximately bytes
+      vsize: 0    // global value size count in approximately bytes
+    }
+  */
 ```
 
 ## Flush the stats (FLUSH STATS):
@@ -310,14 +306,14 @@ Flush the stats.
 myCache.flushStats()
 myCache.getStats()
 /*
-		{
-			keys: 0,    // global key count
-			hits: 0,    // global hit count
-			misses: 0,  // global miss count
-			ksize: 0,   // global key size count in approximately bytes
-			vsize: 0    // global value size count in approximately bytes
-		}
-	*/
+    {
+      keys: 0,    // global key count
+      hits: 0,    // global hit count
+      misses: 0,  // global miss count
+      ksize: 0,   // global key size count in approximately bytes
+      vsize: 0    // global value size count in approximately bytes
+    }
+  */
 ```
 
 ## Close the cache:

@@ -1,31 +1,21 @@
 {
   "name": "@markusberg/node-cache",
+  "version": "7.0.0",
   "description": "Simple and fast NodeJS internal caching. Node internal in memory cache like memcached.",
   "keywords": [
     "cache",
     "caching",
-    "local",
-    "variable",
-    "multi",
-    "memory",
     "internal",
-    "node",
-    "memcached",
-    "object"
-  ],
-  "tags": [
-    "cache",
-    "caching",
     "local",
-    "variable",
-    "multi",
-    "memory",
-    "internal",
-    "node",
     "memcached",
-    "object"
+    "memory",
+    "multi",
+    "node",
+    "object",
+    "variable"
   ],
-  "version": "6.0.0",
+  "homepage": "https://github.com/markusberg/node-cache",
+  "license": "MIT",
   "author": "mpneuried <mp@tcs.de>",
   "maintainers": [
     {
@@ -39,26 +29,25 @@
       "url": "https://erdii.engineering/"
     }
   ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/markusberg/node-cache.git"
+  },
   "type": "module",
   "main": "./dist/node-cache.js",
   "types": "./dist/node-cache.d.ts",
   "exports": {
     ".": "./dist/node-cache.js"
   },
-  "homepage": "https://github.com/markusberg/node-cache",
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/markusberg/node-cache.git"
-  },
-  "license": "MIT",
-  "engines": {
-    "node": ">= 20.0.0"
-  },
   "scripts": {
     "build": "npm run clean && npm run build:prod",
     "build:prod": "tsc -p ./tsconfig.prod.json",
     "build:test": "tsc -p .",
     "clean": "rimraf dist *.tsbuildinfo coverage && mkdir -p dist coverage",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
     "prep": "npm install && husky && chmod ug+x .husky/*",
     "prepublishOnly": "npm run build",
     "test": "npm run clean && npm run test:one",
@@ -73,13 +62,30 @@
     "@markusberg/lcov-parse": "^3.0.0",
     "@types/node": "^24.0.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
-    "nodemon": "^3.1.11",
-    "prettier": "^3.7.4",
-    "rimraf": "^6.1.2",
-    "typescript": "^5.9.3"
+    "lint-staged": "^16.4.0",
+    "nodemon": "^3.1.14",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
+    "rimraf": "^6.1.3",
+    "typescript": "^6.0.2"
   },
   "lint-staged": {
-    "(*.ts|*.md)": "prettier --write --check"
-  }
+    "*.{js,jsx,ts,tsx,mjs,cjs}": "npm run lint",
+    "(*.ts|*.md)": "npm run fmt"
+  },
+  "engines": {
+    "node": ">= 20.0.0"
+  },
+  "tags": [
+    "cache",
+    "caching",
+    "local",
+    "variable",
+    "multi",
+    "memory",
+    "internal",
+    "node",
+    "memcached",
+    "object"
+  ]
 }

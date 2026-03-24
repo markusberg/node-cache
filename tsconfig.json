@@ -14,9 +14,10 @@
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
 
+    "types": ["node"],
+
     "rootDir": "./src",
-    "outDir": "./dist",
-    "baseUrl": "./"
+    "outDir": "./dist"
   },
   "include": ["./src/**/*.ts"]
 }

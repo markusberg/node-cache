@@ -116,7 +116,7 @@ describe('diffStats', () => {
     const objA = { x: 100, y: 200 }
     const objACopy = { x: 100, y: 200 }
     const objB = { x: 30, y: 50 }
-    const result = diffStats(objA, objB)
+    const _result = diffStats(objA, objB)
     assert.deepEqual(objA, objACopy)
   })
 

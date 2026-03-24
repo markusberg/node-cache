@@ -944,7 +944,7 @@ describe(`\`${pkg.name}@${pkg.version}\` on \`node@${process.version}\``, () => 
         assert.equal(innerState.val, eventCache.get(innerState.key))
       })
       it("wait for 'expired' event", async () => {
-        eventCache.once('expired', (key: Key, val: string) => {
+        eventCache.once('expired', (key: Key, _val: string) => {
           assert.equal(innerState.key, key)
           assert.equal(false, state.keys.includes(key))
           assert.equal(undefined, eventCache.data[key])
